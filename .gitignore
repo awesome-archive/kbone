@@ -1,6 +1,7 @@
 .idea
 .DS_Store
 package-lock.json
+yarn.lock
 
 logs
 *.log
@@ -13,3 +14,6 @@ miniprogram_dev
 node_modules
 coverage
 examples/**/dist
+examples/demo21/mp/common
+examples/demo21/mp/miniprogram_npm
+examples/demo21/mp/package1

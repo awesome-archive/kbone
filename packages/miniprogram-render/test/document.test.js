@@ -57,6 +57,9 @@ test('document: cookie', () => {
 })
 
 test('document: getElementById', () => {
+    document.documentElement.id = 'html'
+    expect(document.getElementById('html')).toBe(document.documentElement)
+
     const node1 = document.getElementById('bb')
     expect(node1).toBeInstanceOf(Element)
     expect(node1.tagName).toBe('DIV')
@@ -71,6 +74,8 @@ test('document: getElementById', () => {
 })
 
 test('document: getElementsByTagName', () => {
+    expect(document.getElementsByTagName('html')[0]).toBe(document.documentElement)
+
     const nodes = document.getElementsByTagName('span')
     expect(nodes.length).toBe(3)
     expect(nodes[0]).toBeInstanceOf(Element)
@@ -82,6 +87,9 @@ test('document: getElementsByTagName', () => {
 })
 
 test('document: getElementsByClassName', () => {
+    document.documentElement.classList.add('html')
+    expect(document.getElementsByClassName('html')[0]).toBe(document.documentElement)
+
     const nodes = document.getElementsByClassName('bb4')
     expect(nodes.length).toBe(3)
     expect(nodes[0]).toBeInstanceOf(Element)
@@ -92,7 +100,22 @@ test('document: getElementsByClassName', () => {
     expect(nodes[2].tagName).toBe('SPAN')
 })
 
+test('document: getElementsByName', () => {
+    const nodes1 = document.getElementsByName('n1')
+    expect(nodes1.length).toBe(2)
+    expect(nodes1[0]).toBeInstanceOf(Element)
+    expect(nodes1[0].getAttribute('name')).toBe('n1')
+    expect(nodes1[1]).toBeInstanceOf(Element)
+    expect(nodes1[1].getAttribute('name')).toBe('n1')
+    const nodes2 = document.getElementsByName('n2')
+    expect(nodes2.length).toBe(1)
+    expect(nodes2[0]).toBeInstanceOf(Element)
+    expect(nodes2[0].getAttribute('name')).toBe('n2')
+})
+
 test('document: querySelector', () => {
+    expect(document.querySelector('html')).toBe(document.documentElement)
+
     const node1 = document.querySelector('#bb')
     expect(node1).toBeInstanceOf(Element)
     expect(node1.tagName).toBe('DIV')
@@ -104,9 +127,13 @@ test('document: querySelector', () => {
     expect(node2.id).toBe('bb4')
 
     expect(document.querySelector('#aa')).toBe(null)
+    expect(document.querySelector('body')).toBe(document.body)
+    expect(document.querySelector('html body')).toBe(document.body)
 })
 
 test('document: querySelectorAll', () => {
+    expect(document.querySelectorAll('html')[0]).toBe(document.documentElement)
+
     const nodes = document.querySelectorAll('#bb .bb4')
     expect(nodes.length).toBe(3)
     expect(nodes[0]).toBeInstanceOf(Element)
@@ -117,6 +144,7 @@ test('document: querySelectorAll', () => {
     expect(nodes[2]).toBeInstanceOf(Element)
     expect(nodes[2].tagName).toBe('SPAN')
 
+    expect(document.querySelectorAll('html #bb .bb4').length).toBe(3)
     expect(document.querySelectorAll('#aa').length).toBe(0)
 })
 
@@ -237,4 +265,23 @@ test('document: addEventListener/removeEventListener/dispatchEvent', () => {
     document.dispatchEvent(evt)
 
     expect(res).toEqual(['test1', 'test1', 'test2', 'test2'])
+})
+
+test('document: scrollTop', () => {
+    const div = document.createElement('div')
+    document.body.appendChild(div)
+
+    global.testScrollTop = 20
+
+    div.scrollTop = 20
+    expect(div.scrollTop).toBe(0)
+    expect(global.testNextScrollTop).toBe(undefined)
+
+    document.body.scrollTop = 20
+    expect(document.body.scrollTop).toBe(0)
+    expect(global.testNextScrollTop).toBe(undefined)
+
+    document.documentElement.scrollTop = 20
+    expect(document.documentElement.scrollTop).toBe(20)
+    expect(global.testNextScrollTop).toBe(20)
 })

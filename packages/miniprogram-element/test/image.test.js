@@ -5,7 +5,7 @@ test('image', async() => {
     const componentId = _.load({
         template: `<element class="h5-body" style="width: 100%; height: 100%;" data-private-node-id="e-body" data-private-page-id="${page.pageId}"></element>`,
         usingComponents: {
-            element: _.load('index', 'element'),
+            element: _.elementId,
         },
     }, 'page')
     const component = _.render(componentId)
@@ -20,26 +20,27 @@ test('image', async() => {
     node.setAttribute('behavior', 'image')
     page.document.body.appendChild(node)
     await _.sleep(10)
-    const image = body.querySelector('.h5-wx-component')
 
     // renderingMode
-    await _.checkString(image, node, 'renderingMode', 'rendering-mode', '')
+    await _.checkString(body, node, 'renderingMode', 'rendering-mode', '')
 
     // src
-    await _.checkUrl(image, node, 'src', 'src', '')
+    await _.checkUrl(body, node, 'src', 'src', '')
 
     // mode
-    await _.checkString(image, node, 'mode', 'mode', 'scaleToFill')
+    await _.checkString(body, node, 'mode', 'mode', 'scaleToFill')
+
+    // webp
+    await _.checkBoolean(body, node, 'webp', 'webp', false)
 
     // lazyLoad
-    await _.checkBoolean(image, node, 'lazyLoad', 'lazy-load', false)
+    await _.checkBoolean(body, node, 'lazyLoad', 'lazy-load', false)
 
     // showMenuByLongpress
-    await _.checkBoolean(image, node, 'showMenuByLongpress', 'show-menu-by-longpress', false)
+    await _.checkBoolean(body, node, 'showMenuByLongpress', 'show-menu-by-longpress', false)
 
     // event
-    const wxImage = image.querySelector('.wx-comp-image')
-    await _.checkEvent(wxImage, node, ['error', 'load'])
+    await _.checkEvent(body.querySelector('.h5-wx-component'), node, ['error', 'load'])
 
     page.document.body.removeChild(node)
     document.body.removeChild(wrapper)

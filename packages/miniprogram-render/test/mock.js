@@ -1,3 +1,5 @@
+const fs = require('fs')
+const path = require('path')
 const render = require('../src')
 
 const config = {
@@ -16,6 +18,9 @@ const config = {
             {regexp: '^\\/index\\/aaa\\/detail\\/([^\\/]+?)(?:\\/)?$', options: 'i'},
             {regexp: '^\\/index\\/bbb\\/detail\\/([^\\/]+?)(?:\\/)?$', options: 'i'}
         ],
+    },
+    generate: {
+        worker: true,
     },
     runtime: {
         subpackagesMap: {},
@@ -54,24 +59,57 @@ const config = {
         domExtendMultiplexing: true,
         styleValueReduce: 1000,
         attrValueReduce: 1000,
-    }
+    },
 }
 
 const html = `<div class="aa">
     <div id="bb" class="bb">
         <header>
-            <div class="bb1">123</div>
+            <div class="bb1" name="n1">123</div>
             <div class="bb2" data-a="123">321</div>
         </header>
         <div class="bb3">middle</div>
         <footer>
-            <span id="bb4" class="bb4" data-index=1>1</span>
-            <span class="bb4" data-index=2>2</span>
+            <span id="bb4" class="bb4" name="n1" data-index=1>1</span>
+            <span class="bb4" name="n2" data-index=2>2</span>
             <span class="bb4" data-index=3>3</span>
         </footer>
         <div>tail</div>
+        <wx-component behavior="view">test wx-view</wx-component>
+        <wx-component behavior="text">test wx-text</wx-component>
+        <div data-key="value"></div>
     </div>
 </div>`
+
+let mockWorker
+const workerTmplJs = fs.readFileSync(path.join(__dirname, '../../mp-webpack-plugin/src/tmpl/worker.tmpl.js'))
+class MockWorker {
+    constructor() {
+        // eslint-disable-next-line no-new-func
+        const func = new Function('worker', workerTmplJs + (global.workerScript || ''))
+        func({
+            postMessage: data => {
+                if (this.cb) this.cb(data)
+            },
+
+            onMessage: cb => {
+                this.workerCb = cb
+            },
+        })
+    }
+
+    onMessage(cb) {
+        this.cb = cb
+    }
+
+    postMessage(data) {
+        if (this.workerCb) this.workerCb(data)
+    }
+
+    terminate() {
+        mockWorker = null
+    }
+}
 
 const storageMap = {}
 global.wx = {
@@ -87,6 +125,7 @@ global.wx = {
             screenWidth: 200,
             windowHeight: 280,
             windowWidth: 190,
+            pixelRatio: 3,
         }
     },
     getStorageInfoSync() {
@@ -100,6 +139,11 @@ global.wx = {
     },
     setStorageSync(key, data) {
         storageMap[key] = data
+    },
+    setStorage(key, data) {
+        setTimeout(() => {
+            storageMap[key] = data
+        }, 0)
     },
     removeStorageSync(key) {
         delete storageMap[key]
@@ -129,6 +173,46 @@ global.wx = {
                 options.fail()
             }
         }, 10)
+    },
+    request(options) {
+        expect(options.url).toBe(global.testXHRData.url)
+        expect(options.header).toEqual(global.testXHRData.header)
+        expect(options.method).toBe(global.testXHRData.method)
+        expect(options.dataType).toBe(global.testXHRData.dataType)
+        expect(options.responseType).toBe(global.testXHRData.responseType)
+
+        const success = options.success
+        const fail = options.fail
+        const complete = options.complete
+
+        if (global.testXHRData.res === 'fail') {
+            fail({
+                errMsg: 'some error',
+            })
+            complete()
+        } else if (global.testXHRData.res === 'timeout') {
+            // ignore
+        } else {
+            success({
+                data: global.testXHRData.data,
+                statusCode: 200,
+                header: {
+                    'Content-Type': 'application/javascript',
+                },
+            })
+            complete()
+        }
+    },
+    pageScrollTo(options) {
+        expect(options.duration).toBe(0)
+        expect(options.scrollTop).toBe(global.testScrollTop)
+
+        global.testNextScrollTop = global.testScrollTop
+    },
+    createWorker() {
+        if (mockWorker) throw new Error('error')
+        mockWorker = new MockWorker()
+        return mockWorker
     },
 }
 

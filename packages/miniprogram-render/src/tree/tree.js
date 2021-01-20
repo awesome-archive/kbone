@@ -1,4 +1,5 @@
 const QuerySelector = require('./query-selector')
+const tool = require('../util/tool')
 
 /**
  * 遍历 dom 树，收集类和标签对应的节点列表
@@ -6,22 +7,21 @@ const QuerySelector = require('./query-selector')
 function walkDomTree(node, cache) {
     const tagMap = cache.tagMap = cache.tagMap || {}
     const classMap = cache.classMap = cache.classMap || {}
+    const {tagName, classList} = node
+
+    // 标签
+    tagMap[tagName] = tagMap[tagName] || []
+    tagMap[tagName].push(node)
+
+    // 类
+    for (const className of classList) {
+        classMap[className] = classMap[className] || []
+        classMap[className].push(node)
+    }
 
     const children = node.children || []
 
     for (const child of children) {
-        const {tagName, classList} = child
-
-        // 标签
-        tagMap[tagName] = tagMap[tagName] || []
-        tagMap[tagName].push(child)
-
-        // 类
-        for (const className of classList) {
-            classMap[className] = classMap[className] || []
-            classMap[className].push(child)
-        }
-
         // 递归遍历
         walkDomTree(child, cache)
     }
@@ -99,6 +99,12 @@ class Tree {
     getByTagName(tagName, node) {
         const cache = {}
         walkDomTree(node || this.root, cache)
+
+        if (tool.checkIsWxComponent(tagName.toLowerCase(), false)) {
+            // 内置组件
+            tagName = tagName.toLowerCase().slice(3)
+            return (cache.tagMap['WX-COMPONENT'] || []).filter(findNode => findNode.behavior === tagName)
+        }
 
         return cache.tagMap[tagName.toUpperCase()] || []
     }

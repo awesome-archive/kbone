@@ -5,7 +5,7 @@ test('camera', async() => {
     const componentId = _.load({
         template: `<element class="h5-body" style="width: 100%; height: 100%;" data-private-node-id="e-body" data-private-page-id="${page.pageId}"></element>`,
         usingComponents: {
-            element: _.load('index', 'element'),
+            element: _.elementId,
         },
     }, 'page')
     const component = _.render(componentId)
@@ -20,23 +20,24 @@ test('camera', async() => {
     node.setAttribute('behavior', 'camera')
     page.document.body.appendChild(node)
     await _.sleep(10)
-    const camera = body.querySelector('.h5-wx-component')
 
     // mode
-    await _.checkString(camera, node, 'mode', 'mode', 'normal')
+    await _.checkString(body, node, 'mode', 'mode', 'normal')
+
+    // resolution
+    await _.checkString(body, node, 'resolution', 'resolution', 'medium')
 
     // devicePosition
-    await _.checkString(camera, node, 'devicePosition', 'device-position', 'back')
+    await _.checkString(body, node, 'devicePosition', 'device-position', 'back')
 
     // flash
-    await _.checkString(camera, node, 'flash', 'flash', 'auto')
+    await _.checkString(body, node, 'flash', 'flash', 'auto')
 
     // frameSize
-    await _.checkString(camera, node, 'frameSize', 'frame-size', 'medium')
+    await _.checkString(body, node, 'frameSize', 'frame-size', 'medium')
 
     // event
-    const wxCamera = camera.querySelector('.wx-comp-camera')
-    await _.checkEvent(wxCamera, node, ['stop', 'error', 'initdone', 'scancode'])
+    await _.checkEvent(body.querySelector('.h5-wx-component'), node, ['stop', 'error', 'initdone', 'scancode'])
 
     page.document.body.removeChild(node)
     document.body.removeChild(wrapper)

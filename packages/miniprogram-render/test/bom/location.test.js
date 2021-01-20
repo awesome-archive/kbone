@@ -240,13 +240,13 @@ test('location: set', () => {
 
     // search
     expect(location.search).toBe('?query=string')
-    global.expectPagePath = `/pages/list/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/list/123#hash')}&search=&hash=${encodeURIComponent('#hash')}`
+    global.expectPagePath = `/pages/list/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/list/123#hash')}&hash=${encodeURIComponent('#hash')}`
     location.search = ''
     expect(location.search).toBe('')
     global.expectPagePath = `/pages/list/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/list/123?a=123#hash')}&search=${encodeURIComponent('?a=123')}&hash=${encodeURIComponent('#hash')}`
     location.search = 'a=123'
     expect(location.search).toBe('?a=123')
-    global.expectPagePath = `/pages/list/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/list/123#hash')}&search=&hash=${encodeURIComponent('#hash')}`
+    global.expectPagePath = `/pages/list/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/list/123#hash')}&hash=${encodeURIComponent('#hash')}`
     location.search = '?'
     expect(location.search).toBe('')
     global.expectPagePath = `/pages/list/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/list/123?c=321#hash')}&search=${encodeURIComponent('?c=321')}&hash=${encodeURIComponent('#hash')}`
@@ -306,13 +306,10 @@ test('location: set', () => {
     expect(tempURL).toBe('https://a.b.c/aa/bb?v=321#abc')
     expect(tempType).toBe('jump')
     expect(hashChangeCount).toBe(4)
-    tempURL = location.href
     global.expectPagePath = `/pages/list/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/list/c.b.a?p=456#000')}&search=${encodeURIComponent('?p=456')}&hash=${encodeURIComponent('#000')}`
     location.href = 'c.b.a?p=456#000' // 不带协议，不以 / 开头
     expect(location.href).toBe('https://test.miniprogram.com/index/aaa/list/c.b.a?p=456#000')
-    expect(hashChangeCount).toBe(5)
-    expect(oldURL).toBe(tempURL)
-    expect(newURL).toBe(location.href)
+    expect(hashChangeCount).toBe(4)
     location.href = 'c.a.b/aa/bb?p=456#000' // 不带协议，不以 / 开头
     expect(location.href).toBe('https://test.miniprogram.com/index/aaa/list/c.b.a?p=456#000')
     expect(pageNotFoundCount).toBe(3)
@@ -322,7 +319,7 @@ test('location: set', () => {
     global.expectPagePath = `/pages/detail/index?type=jump&targeturl=${encodeURIComponent('https://test.miniprogram.com/index/aaa/detail/haha?n=098#000')}&search=${encodeURIComponent('?n=098')}&hash=${encodeURIComponent('#000')}`
     location.href = '/index/aaa/detail/haha?n=098#000' // 不带协议，以 / 开头
     expect(location.href).toBe('https://test.miniprogram.com/index/aaa/detail/haha?n=098#000')
-    expect(hashChangeCount).toBe(5)
+    expect(hashChangeCount).toBe(4)
     location.href = '/haha/rr/ee?n=098#111' // 不带协议，以 / 开头
     expect(location.href).toBe('https://test.miniprogram.com/index/aaa/detail/haha?n=098#000')
     expect(pageNotFoundCount).toBe(4)
@@ -331,7 +328,7 @@ test('location: set', () => {
     tempURL = location.href
     location.href = '#222' // 不带协议，以 # 开头
     expect(location.href).toBe('https://test.miniprogram.com/index/aaa/detail/haha?n=098#222')
-    expect(hashChangeCount).toBe(6)
+    expect(hashChangeCount).toBe(5)
     expect(oldURL).toBe(tempURL)
     expect(newURL).toBe(location.href)
 

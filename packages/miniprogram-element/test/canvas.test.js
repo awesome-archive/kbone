@@ -5,7 +5,7 @@ test('canvas', async() => {
     const componentId = _.load({
         template: `<element class="h5-body" style="width: 100%; height: 100%;" data-private-node-id="e-body" data-private-page-id="${page.pageId}"></element>`,
         usingComponents: {
-            element: _.load('index', 'element'),
+            element: _.elementId,
         },
     }, 'page')
     const component = _.render(componentId)
@@ -19,20 +19,21 @@ test('canvas', async() => {
     const node = page.document.createElement('canvas')
     page.document.body.appendChild(node)
     await _.sleep(10)
-    const canvas = body.querySelector('.h5-canvas')
 
     // type
-    await _.checkString(canvas, node, 'type', 'type', '')
+    await _.checkString(body, node, 'type', 'type', '')
 
     // canvasId
-    await _.checkString(canvas, node, 'canvasId', 'canvas-id', '')
+    await _.checkString(body, node, 'canvasId', 'canvas-id', '')
 
     // disableScroll
-    await _.checkBoolean(canvas, node, 'disableScroll', 'disable-scroll', false)
+    await _.checkBoolean(body, node, 'disableScroll', 'disable-scroll', false)
+
+    // disableEvent
+    await _.checkBoolean(body, node, 'disableEvent', 'disable-event', false)
 
     // event
-    const wxCanvas = canvas.querySelector('.wx-comp-canvas')
-    await _.checkEvent(wxCanvas, node, ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'longtap', 'error'])
+    await _.checkEvent(body.querySelector('.h5-canvas'), node, [['touchstart', 'canvastouchstart'], ['touchmove', 'canvastouchmove'], ['touchend', 'canvastouchend'], ['touchcancel', 'canvastouchcancel'], 'longtap', 'error'])
 
     page.document.body.removeChild(node)
     document.body.removeChild(wrapper)

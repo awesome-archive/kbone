@@ -1,4 +1,5 @@
 const EventTarget = require('./event/event-target')
+const Event = require('./event/event')
 const Tree = require('./tree/tree')
 const Node = require('./node/node')
 const Element = require('./node/element')
@@ -12,6 +13,8 @@ const Input = require('./node/element/input')
 const Textarea = require('./node/element/textarea')
 const Video = require('./node/element/video')
 const Canvas = require('./node/element/canvas')
+const Select = require('./node/element/select')
+const Option = require('./node/element/option')
 const NotSupport = require('./node/element/not-support')
 const WxComponent = require('./node/element/wx-component')
 const WxCustomComponent = require('./node/element/wx-custom-component')
@@ -24,33 +27,66 @@ const CONSTRUCTOR_MAP = {
     TEXTAREA: Textarea,
     VIDEO: Video,
     CANVAS: Canvas,
-    'WX-COMPONENT': WxComponent,
+    SELECT: Select,
+    OPTION: Option,
 }
-const WX_COMPONENT_MAP = {}
-const WX_COMPONENT_LIST = [
-    'movable-view', 'cover-image', 'cover-view', 'movable-area', 'scroll-view', 'swiper', 'swiper-item', 'view',
-    'icon', 'progress', 'rich-text', 'text',
-    'button', 'checkbox', 'checkbox-group', 'editor', 'form', 'input', 'label', 'picker', 'picker-view', 'picker-view-column', 'radio', 'radio-group', 'slider', 'switch', 'textarea',
-    'functional-page-navigator', 'navigator',
-    'audio', 'camera', 'image', 'live-player', 'live-pusher', 'video',
-    'map',
-    'canvas',
-    'ad', 'official-account', 'open-data', 'web-view'
-]
-WX_COMPONENT_LIST.forEach(name => WX_COMPONENT_MAP[name] = name)
+const WX_COMPONENT_TRANSFORM_LIST = ['checkbox', 'checkbox-group', 'input', 'label', 'radio', 'radio-group', 'textarea', 'canvas'] // 需要从 wx-xxx 转回 xxx 节点
 let WX_CUSTOM_COMPONENT_MAP = {}
 
 /**
- * 判断是否是内置组件
+ * 将部分 wx-xxx 组件转换成普通 dom 节点
  */
-function checkIsWxComponent(tagName, notNeedPrefix) {
-    const hasPrefix = tagName.indexOf('wx-') === 0
-    if (notNeedPrefix) {
-        return hasPrefix ? WX_COMPONENT_MAP[tagName.slice(3)] : WX_COMPONENT_MAP[tagName]
-    } else {
-        return hasPrefix ? WX_COMPONENT_MAP[tagName.slice(3)] : false
+function transformWxComponent2Dom(wxComponentName, options, tree) {
+    let groupEvent = null
+    if (wxComponentName === 'radio' || wxComponentName === 'checkbox') {
+        options.attrs.type = wxComponentName
+        wxComponentName = 'input'
+    } else if (wxComponentName === 'radio-group' || wxComponentName === 'checkbox-group') {
+        groupEvent = wxComponentName.split('-')[0]
+        wxComponentName = 'div'
     }
+    options.tagName = wxComponentName
+    delete options.attrs.behavior
+    const normalElement = CONSTRUCTOR_MAP[wxComponentName.toUpperCase()] || Element
+    const element = normalElement.$$create(options, tree)
+
+    if (groupEvent) {
+        // group 组件转成 div，监听底下的表单组件来做处理
+        element.addEventListener('change', evt => {
+            if (!evt.$$isGroup) evt.stopImmediatePropagation()
+        })
+        element.addEventListener(`$$${groupEvent}Change`, evt => {
+            const detail = {}
+            if (groupEvent === 'radio') {
+                (element.querySelectorAll('input[type=radio]') || []).forEach(item => {
+                    if (item !== evt.target) item.setAttribute('checked', false)
+                })
+                detail.value = evt.target.value
+            } else if (groupEvent === 'checkbox') {
+                detail.value = (element.querySelectorAll('input[type=checkbox]') || [])
+                    .filter(item => item.checked)
+                    .map(item => item.value)
+            }
+
+            element.$$trigger('change', {
+                event: new Event({
+                    timeStamp: evt.timeStamp,
+                    touches: evt.touches,
+                    changedTouches: evt.changedTouches,
+                    name: 'change',
+                    target: element,
+                    eventPhase: Event.AT_TARGET,
+                    detail,
+                    $$extra: {$$isGroup: true},
+                }),
+                currentTarget: element,
+            })
+        })
+    }
+
+    return element
 }
+
 
 class Document extends EventTarget {
     constructor(pageId, nodeIdMap) {
@@ -86,7 +122,7 @@ class Document extends EventTarget {
             nodeId: 'e-body',
             children: [],
         }, nodeIdMap, this)
-        this.$_cookie = new Cookie()
+        this.$_cookie = new Cookie(pageName)
         this.$_config = null
 
         // documentElement
@@ -97,18 +133,19 @@ class Document extends EventTarget {
             type: Node.DOCUMENT_NODE,
         })
         this.$_node.$$updateParent(this) // documentElement 的 parentNode 是 document
-        this.$_node.scrollTop = 0
 
         // head 元素
         this.$_head = this.createElement('head')
 
         // 更新 body 的 parentNode
         this.$_tree.root.$$updateParent(this.$_node)
+        this.$_node.$$children.push(this.$_tree.root)
 
-        // 处久化 cookie
-        if (cookieStore === 'storage') {
+        // 持久化 cookie
+        if (cookieStore !== 'memory' && cookieStore !== 'globalmemory') {
             try {
-                const cookie = wx.getStorageSync(`PAGE_COOKIE_${pageName}`)
+                const key = cookieStore === 'storage' ? `PAGE_COOKIE_${pageName}` : 'PAGE_COOKIE'
+                const cookie = wx.getStorageSync(key)
                 if (cookie) this.$$cookieInstance.deserialize(cookie)
             } catch (err) {
                 // ignore
@@ -150,6 +187,13 @@ class Document extends EventTarget {
     }
 
     /**
+     * 设置页面显示状态
+     */
+    set $$visibilityState(value) {
+        this.$_visibilityState = value
+    }
+
+    /**
      * 触发节点事件
      */
     $$trigger(eventName, options) {
@@ -168,13 +212,21 @@ class Document extends EventTarget {
         const constructorClass = CONSTRUCTOR_MAP[tagName]
         if (constructorClass) {
             return constructorClass.$$create(options, tree)
-        // eslint-disable-next-line no-cond-assign
-        } else if (wxComponentName = checkIsWxComponent(originTagName, this.$$notNeedPrefix)) {
-            // 内置组件的特殊写法，转成 wx-component 节点
-            options.tagName = 'wx-component'
+        } else if (tagName === 'WX-COMPONENT') {
             options.attrs = options.attrs || {}
-            options.attrs.behavior = wxComponentName
-            return WxComponent.$$create(options, tree)
+            const behavior = options.attrs.behavior
+            if (behavior && WX_COMPONENT_TRANSFORM_LIST.indexOf(behavior) !== -1) return transformWxComponent2Dom(behavior, options, tree) // 需要转成普通 dom
+            else return WxComponent.$$create(options, tree)
+        // eslint-disable-next-line no-cond-assign
+        } else if (wxComponentName = tool.checkIsWxComponent(originTagName, this.$$notNeedPrefix)) {
+            // 内置组件的特殊写法，转成 wx-component 节点
+            options.attrs = options.attrs || {}
+            if (WX_COMPONENT_TRANSFORM_LIST.indexOf(wxComponentName) !== -1) return transformWxComponent2Dom(wxComponentName, options, tree) // 需要转成普通 dom
+            else {
+                options.tagName = 'wx-component'
+                options.attrs.behavior = wxComponentName
+                return WxComponent.$$create(options, tree)
+            }
         } else if (WX_CUSTOM_COMPONENT_MAP[originTagName]) {
             // 自定义组件的特殊写法，转成 wx-custom-component 节点
             options.tagName = 'wx-custom-component'
@@ -276,6 +328,14 @@ class Document extends EventTarget {
         this.$_cookie.setCookie(value, this.URL)
     }
 
+    get visibilityState() {
+        return this.$_visibilityState
+    }
+
+    get hidden() {
+        return this.$_visibilityState === 'visible'
+    }
+
     getElementById(id) {
         if (typeof id !== 'string') return
 
@@ -285,25 +345,31 @@ class Document extends EventTarget {
     getElementsByTagName(tagName) {
         if (typeof tagName !== 'string') return []
 
-        return this.$_tree.getByTagName(tagName)
+        return this.$_tree.getByTagName(tagName, this.documentElement)
     }
 
     getElementsByClassName(className) {
         if (typeof className !== 'string') return []
 
-        return this.$_tree.getByClassName(className)
+        return this.$_tree.getByClassName(className, this.documentElement)
+    }
+
+    getElementsByName(name) {
+        if (typeof name !== 'string') return []
+
+        return this.$_tree.query(`*[name=${name}]`, this.documentElement)
     }
 
     querySelector(selector) {
         if (typeof selector !== 'string') return
 
-        return this.$_tree.query(selector)[0] || null
+        return this.$_tree.query(selector, this.documentElement)[0] || null
     }
 
     querySelectorAll(selector) {
         if (typeof selector !== 'string') return []
 
-        return this.$_tree.query(selector)
+        return this.$_tree.query(selector, this.documentElement)
     }
 
     createElement(tagName) {

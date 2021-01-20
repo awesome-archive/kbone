@@ -17,21 +17,9 @@ module.exports = {
 		extra: {
 			navigationBarTextStyle: 'black',
 		},
-	},	
-	pages: {},	
-	optimization: {
-		domSubTreeLevel: 5,
-
-		elementMultiplexing: true,
-		textMultiplexing: true,
-		commentMultiplexing: true,
-		domExtendMultiplexing: true,
-
-		styleValueReduce: 5000,
-		attrValueReduce: 5000,
 	},
 	projectConfig: {
-		appid: '',
+		appid: 'wx14c7c4cd189644a1',
         projectname: 'kbone-demo2',
 	},
 	packageConfig: {

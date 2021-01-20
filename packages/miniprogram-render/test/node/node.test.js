@@ -134,6 +134,17 @@ test('node: ownerDocument', () => {
     expect(node4.ownerDocument).toBe(document)
 })
 
+test('node: childNodes', () => {
+    const node1 = document.createElement('div')
+    const node2 = document.createTextNode('text')
+    const node3 = document.createComment('comment')
+    node1.innerHTML = '<div>123</div>321<span>123</span><!-- haha -->321'
+
+    expect(node1.childNodes.length).toBe(5)
+    expect(node2.childNodes.length).toBe(0)
+    expect(node3.childNodes.length).toBe(0)
+})
+
 test('node: hasChildNodes', () => {
     const node1 = document.createElement('div')
     const node2 = document.createElement('div')
@@ -154,4 +165,24 @@ test('node: hasChildNodes', () => {
     expect(node4.hasChildNodes()).toBe(true)
     expect(node5.hasChildNodes()).toBe(false)
     expect(node6.hasChildNodes()).toBe(false)
+})
+
+test('element: remove', () => {
+    const node1 = document.createElement('div')
+    const node2 = document.createElement('div')
+    const node3 = document.createTextNode('123')
+    const node4 = document.createElement('div')
+
+    node1.appendChild(node2)
+    node1.appendChild(node3)
+
+    expect(node2.parentNode).toBe(node1)
+    expect(node2.remove()).toBe(node2)
+    expect(node2.parentNode).toBe(null)
+    expect(node3.parentNode).toBe(node1)
+    expect(node3.remove()).toBe(node3)
+    expect(node3.parentNode).toBe(null)
+    expect(node4.parentNode).toBe(null)
+    expect(node4.remove()).toBe(node4)
+    expect(node4.parentNode).toBe(null)
 })

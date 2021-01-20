@@ -83,6 +83,30 @@ test('tokenize html', () => {
     ])
     expect(res3.endStack).toEqual(['div', 'script', 'span', 'div'])
     expect(res3.textStack).toEqual(['123', 'var msg = "hello world";\n      console.log(msg);', 'haha', '321'])
+
+    const res4 = getTokenizeResult('<180abc')
+    expect(res4.startStack.length).toBe(0)
+    expect(res4.endStack.length).toBe(0)
+    expect(res4.textStack.length).toBe(1)
+    expect(res4.textStack).toEqual(['&lt;180abc'])
+
+    const res5 = getTokenizeResult('1>80abc')
+    expect(res5.startStack.length).toBe(0)
+    expect(res5.endStack.length).toBe(0)
+    expect(res5.textStack.length).toBe(1)
+    expect(res5.textStack).toEqual(['1&gt;80abc'])
+
+    const res6 = getTokenizeResult('1>80ab<cd<')
+    expect(res6.startStack.length).toBe(0)
+    expect(res6.endStack.length).toBe(0)
+    expect(res6.textStack.length).toBe(1)
+    expect(res6.textStack).toEqual(['1&gt;80ab&lt;cd&lt;'])
+
+    const res7 = getTokenizeResult('<>180abcd<>')
+    expect(res7.startStack.length).toBe(0)
+    expect(res7.endStack.length).toBe(0)
+    expect(res7.textStack.length).toBe(1)
+    expect(res7.textStack).toEqual(['&lt;&gt;180abcd&lt;&gt;'])
 })
 
 test('parse html', () => {
@@ -106,7 +130,7 @@ test('parse html', () => {
                 children: [{
                     type: 'element',
                     tagName: 'div',
-                    attrs: [{name: 'class', value: 'bb1'}],
+                    attrs: [{name: 'class', value: 'bb1'}, {name: 'name', value: 'n1'}],
                     unary: false,
                     children: [{type: 'text', content: '123'}]
                 }, {
@@ -130,13 +154,13 @@ test('parse html', () => {
                 children: [{
                     type: 'element',
                     tagName: 'span',
-                    attrs: [{name: 'id', value: 'bb4'}, {name: 'class', value: 'bb4'}, {name: 'data-index', value: '1'}],
+                    attrs: [{name: 'id', value: 'bb4'}, {name: 'class', value: 'bb4'}, {name: 'name', value: 'n1'}, {name: 'data-index', value: '1'}],
                     unary: false,
                     children: [{type: 'text', content: '1'}],
                 }, {
                     type: 'element',
                     tagName: 'span',
-                    attrs: [{name: 'class', value: 'bb4'}, {name: 'data-index', value: '2'}],
+                    attrs: [{name: 'class', value: 'bb4'}, {name: 'name', value: 'n2'}, {name: 'data-index', value: '2'}],
                     unary: false,
                     children: [{type: 'text', content: '2'}],
                 }, {
@@ -152,6 +176,24 @@ test('parse html', () => {
                 attrs: [],
                 unary: false,
                 children: [{type: 'text', content: 'tail'}],
+            }, {
+                type: 'element',
+                tagName: 'wx-component',
+                attrs: [{name: 'behavior', value: 'view'}],
+                unary: false,
+                children: [{type: 'text', content: 'test wx-view'}],
+            }, {
+                type: 'element',
+                tagName: 'wx-component',
+                attrs: [{name: 'behavior', value: 'text'}],
+                unary: false,
+                children: [{type: 'text', content: 'test wx-text'}],
+            }, {
+                type: 'element',
+                tagName: 'div',
+                attrs: [{name: 'data-key', value: 'value'}],
+                unary: false,
+                children: [],
             }],
         }],
     }])

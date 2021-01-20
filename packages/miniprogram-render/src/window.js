@@ -4,14 +4,13 @@ const Event = require('./event/event')
 const OriginalCustomEvent = require('./event/custom-event')
 const Location = require('./bom/location')
 const Navigator = require('./bom/navigator')
-const cache = require('./util/cache')
-const tool = require('./util/tool')
 const Screen = require('./bom/screen')
 const History = require('./bom/history')
 const Miniprogram = require('./bom/miniprogram')
-const LocalStorage = require('./bom/local-storage')
-const SessionStorage = require('./bom/session-storage')
+const {SessionStorage, LocalStorage} = require('./bom/storage')
+const WorkerImpl = require('./bom/worker')
 const Performance = require('./bom/performance')
+const OriginalXMLHttpRequest = require('./bom/xml-http-request')
 const Node = require('./node/node')
 const Element = require('./node/element')
 const TextNode = require('./node/text-node')
@@ -19,6 +18,8 @@ const Comment = require('./node/comment')
 const ClassList = require('./node/class-list')
 const Style = require('./node/style')
 const Attribute = require('./node/attribute')
+const cache = require('./util/cache')
+const tool = require('./util/tool')
 
 let lastRafTime = 0
 const WINDOW_PROTOTYPE_MAP = {
@@ -29,6 +30,7 @@ const WINDOW_PROTOTYPE_MAP = {
     history: History.prototype,
     localStorage: LocalStorage.prototype,
     sessionStorage: SessionStorage.prototype,
+    XMLHttpRequest: OriginalXMLHttpRequest.prototype,
     event: Event.prototype,
 }
 const ELEMENT_PROTOTYPE_MAP = {
@@ -36,16 +38,18 @@ const ELEMENT_PROTOTYPE_MAP = {
     classList: ClassList.prototype,
     style: Style.prototype,
 }
+const subscribeMap = {}
+const globalObject = {}
 
 class Window extends EventTarget {
     constructor(pageId) {
         super()
 
+        const config = cache.getConfig()
         const timeOrigin = +new Date()
+        const that = this
 
         this.$_pageId = pageId
-        this.$_pageRoute = tool.getPageRoute(pageId)
-        this.$_pageName = tool.getPageName(this.$_pageRoute)
 
         this.$_outerHeight = 0
         this.$_outerWidth = 0
@@ -69,14 +73,26 @@ class Window extends EventTarget {
         // 补充实例的属性，用于 'xxx' in XXX 判断
         this.onhashchange = null
 
+        // HTMLElement 构造器
         this.$_elementConstructor = function HTMLElement(...args) {
             return Element.$$create(...args)
         }
+
+        // CustomEvent 构造器
         this.$_customEventConstructor = class CustomEvent extends OriginalCustomEvent {
             constructor(name = '', options = {}) {
                 options.timeStamp = +new Date() - timeOrigin
                 super(name, options)
             }
+        }
+
+        // XMLHttpRequest 构造器
+        this.$_xmlHttpRequestConstructor = class XMLHttpRequest extends OriginalXMLHttpRequest {constructor() { super(that) }}
+
+        // Worker/SharedWorker 构造器
+        if (config.generate && config.generate.worker) {
+            this.$_workerConstructor = class Worker extends WorkerImpl.Worker {constructor(url) { super(url, that) }}
+            this.$_sharedWorkerConstructor = class SharedWorker extends WorkerImpl.SharedWorker {constructor(url) { super(url, that) }}
         }
 
         // react 环境兼容
@@ -87,11 +103,6 @@ class Window extends EventTarget {
      * 初始化内部事件
      */
     $_initInnerEvent() {
-        const config = cache.getConfig()
-        const runtime = config.runtime || {}
-        const cookieStore = runtime.cookieStore
-
-
         // 监听 location 的事件
         this.$_location.addEventListener('hashchange', ({oldURL, newURL}) => {
             this.$$trigger('hashchange', {
@@ -121,18 +132,12 @@ class Window extends EventTarget {
             })
         })
 
-        // 监听自身的事件
-        const onPageUnloadOrHide = () => {
-            // 持久化 cookie
-            if (cookieStore === 'storage') {
-                wx.setStorage({
-                    key: `PAGE_COOKIE_${this.$_pageName}`,
-                    data: this.document.$$cookieInstance.serialize(),
-                })
-            }
-        }
-        this.addEventListener('wxunload', onPageUnloadOrHide)
-        this.addEventListener('wxhide', onPageUnloadOrHide)
+        // 监听滚动事件
+        this.addEventListener('scroll', () => {
+            const document = this.document
+            // 记录最近一次滚动事件触发的时间戳
+            if (document) document.documentElement.$$scrollTimeStamp = +new Date()
+        })
     }
 
     /**
@@ -200,6 +205,28 @@ class Window extends EventTarget {
      */
     get $$miniprogram() {
         return this.$_miniprogram
+    }
+
+    /**
+     * 获取全局共享对象
+     */
+    get $$global() {
+        return globalObject
+    }
+
+    /**
+     * 销毁实例
+     */
+    $$destroy() {
+        super.$$destroy()
+
+        const pageId = this.$_pageId
+
+        WorkerImpl.destroy(pageId)
+        Object.keys(subscribeMap).forEach(name => {
+            const handlersMap = subscribeMap[name]
+            if (handlersMap[pageId]) handlersMap[pageId] = null
+        })
     }
 
     /**
@@ -396,6 +423,58 @@ class Window extends EventTarget {
     }
 
     /**
+     * 订阅广播事件
+     */
+    $$subscribe(name, handler) {
+        if (typeof name !== 'string' || typeof handler !== 'function') return
+
+        const pageId = this.$_pageId
+        subscribeMap[name] = subscribeMap[name] || {}
+        subscribeMap[name][pageId] = subscribeMap[name][pageId] || []
+        subscribeMap[name][pageId].push(handler)
+    }
+
+    /**
+     * 取消订阅广播事件
+     */
+    $$unsubscribe(name, handler) {
+        const pageId = this.$_pageId
+
+        if (typeof name !== 'string' || !subscribeMap[name] || !subscribeMap[name][pageId]) return
+
+        const handlers = subscribeMap[name][pageId]
+        if (!handler) {
+            // 取消所有 handler 的订阅
+            handlers.length = 0
+        } else if (typeof handler === 'function') {
+            const index = handlers.indexOf(handler)
+            if (index !== -1) handlers.splice(index, 1)
+        }
+    }
+
+    /**
+     * 发布广播事件
+     */
+    $$publish(name, data) {
+        if (typeof name !== 'string' || !subscribeMap[name]) return
+
+        Object.keys(subscribeMap[name]).forEach(pageId => {
+            const handlers = subscribeMap[name][pageId]
+            if (handlers && handlers.length) {
+                handlers.forEach(handler => {
+                    if (typeof handler !== 'function') return
+
+                    try {
+                        handler.call(null, data)
+                    } catch (err) {
+                        console.error(err)
+                    }
+                })
+            }
+        })
+    }
+
+    /**
      * 对外属性和方法
      */
     get document() {
@@ -416,6 +495,10 @@ class Window extends EventTarget {
 
     get CustomEvent() {
         return this.$_customEventConstructor
+    }
+
+    get Event() {
+        return Event
     }
 
     get self() {
@@ -510,13 +593,57 @@ class Window extends EventTarget {
         return Date
     }
 
+    get Symbol() {
+        return Symbol
+    }
+
+    get parseInt() {
+        return parseInt
+    }
+
+    get parseFloat() {
+        return parseFloat
+    }
+
+    get console() {
+        return console
+    }
+
     get performance() {
         return this.$_performance
+    }
+
+    get SVGElement() {
+        // 不作任何实现，只作兼容使用
+        console.warn('window.SVGElement is not supported')
+        return function() {}
+    }
+
+    get XMLHttpRequest() {
+        return this.$_xmlHttpRequestConstructor
+    }
+
+    get Worker() {
+        return this.$_workerConstructor
+    }
+
+    get SharedWorker() {
+        return this.$_sharedWorkerConstructor
+    }
+
+    get devicePixelRatio() {
+        return wx.getSystemInfoSync().pixelRatio
     }
 
     open(url) {
         // 不支持 windowName 和 windowFeatures
         this.location.$$open(url)
+    }
+
+    close() {
+        wx.navigateBack({
+            delta: 1,
+        })
     }
 
     getComputedStyle() {

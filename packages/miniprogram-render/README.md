@@ -4,7 +4,7 @@
 
 这是一个 dom 环境模拟工具，它为小程序而设计，用于提供 dom 接口给开发者使用。
 
-> 可以认为这是一个跑在小程序 appService 上的一个超轻量级 jsDom
+> 可以认为这是一个跑在小程序 appService 上的一个超轻量级 jsDom。
 
 ## 安装
 
@@ -17,7 +17,6 @@ npm install --save miniprogram-render
 ```js
 const mp = require('miniprogram-render')
 
-```js
 Page({
     onLoad() {
         // 创建页面
@@ -55,10 +54,6 @@ const page2 = mp.createPage('/pages/home/index', config2) // 传入 config2
 ```
 
 > PS：config 的覆盖规则设计是为了保证多个页面能共用一份配置，以确保页面的表现一致
-
-#### config
-
-同 `mp-webpack-plugin` 的[配置参数](../../docs/miniprogram.config.js)。
 
 ### destroyPage(pageId)
 

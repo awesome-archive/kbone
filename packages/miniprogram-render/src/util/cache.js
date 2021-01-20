@@ -1,5 +1,6 @@
 const pageMap = {}
 let configCache = {}
+const cookieCache = {}
 
 /**
  * 初始化
@@ -31,6 +32,13 @@ function getDocument(pageId) {
  */
 function getWindow(pageId) {
     return pageMap[pageId] && pageMap[pageId].window
+}
+
+/**
+ * 获取 window 列表
+ */
+function getWindowList() {
+    return Object.keys(pageMap).map(pageId => pageMap[pageId].window)
 }
 
 /**
@@ -74,13 +82,22 @@ function getConfig() {
     return configCache
 }
 
+/**
+ * 获取全局 cookie
+ */
+function getCookie() {
+    return cookieCache
+}
+
 module.exports = {
     init,
     destroy,
     getDocument,
     getWindow,
+    getWindowList,
     setNode,
     getNode,
     setConfig,
     getConfig,
+    getCookie,
 }

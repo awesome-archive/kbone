@@ -5,7 +5,7 @@ test('official-account', async() => {
     const componentId = _.load({
         template: `<element class="h5-body" style="width: 100%; height: 100%;" data-private-node-id="e-body" data-private-page-id="${page.pageId}"></element>`,
         usingComponents: {
-            element: _.load('index', 'element'),
+            element: _.elementId,
         },
     }, 'page')
     const component = _.render(componentId)
@@ -20,11 +20,9 @@ test('official-account', async() => {
     node.setAttribute('behavior', 'official-account')
     page.document.body.appendChild(node)
     await _.sleep(10)
-    const officialAccount = body.querySelector('.h5-wx-component')
 
     // event
-    const wxOfficialAccount = officialAccount.querySelector('.wx-comp-official-account')
-    await _.checkEvent(wxOfficialAccount, node, ['load', 'error'])
+    await _.checkEvent(body.querySelector('.h5-wx-component'), node, ['load', 'error'])
 
     page.document.body.removeChild(node)
     document.body.removeChild(wrapper)

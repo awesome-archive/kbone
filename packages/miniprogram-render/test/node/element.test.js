@@ -6,10 +6,12 @@ const ClassList = require('../../src/node/class-list')
 const Style = require('../../src/node/style')
 const cache = require('../../src/util/cache')
 
+let window
 let document
 
 beforeAll(() => {
     const res = mock.createPage('home')
+    window = res.window
     document = res.document
 })
 
@@ -148,6 +150,10 @@ test('element: innerHTML/outerHTML', () => {
     expect(node1.innerHTML).toBe('<span id="abc"></span><div id="cc" class="a b c" style="position:absolute;top:10px;left:20px;">123<span id="cba">555</span>321</div><br />')
     expect(node1.outerHTML).toBe('<article id="outer"><span id="abc"></span><div id="cc" class="a b c" style="position:absolute;top:10px;left:20px;">123<span id="cba">555</span>321</div><br /></article>')
 
+    node2.id = '"<abc>"'
+    expect(node1.innerHTML).toBe('<span id="&quot;<abc>&quot;"></span><div id="cc" class="a b c" style="position:absolute;top:10px;left:20px;">123<span id="cba">555</span>321</div><br />')
+    expect(node1.outerHTML).toBe('<article id="outer"><span id="&quot;<abc>&quot;"></span><div id="cc" class="a b c" style="position:absolute;top:10px;left:20px;">123<span id="cba">555</span>321</div><br /></article>')
+
     node1.innerHTML = '<div id="a">321<span id="inner" b="inner">765</span>123</div><div id="c">555</div><p style="color: green; text-align: center;">I am content</p>'
     expect(node1.childNodes.length).toBe(3)
     expect(node1.childNodes[0].id).toBe('a')
@@ -167,7 +173,7 @@ test('element: innerHTML/outerHTML', () => {
     expect(node1.childNodes[2].childNodes.length).toBe(1)
     expect(node1.childNodes[2].childNodes[0].textContent).toBe('I am content')
     expect(parentUpdateCount).toBe(1)
-    expect(node1UpdateCount).toBe(7)
+    expect(node1UpdateCount).toBe(8)
 
     node1.outerHTML = '<header id="outer2"><div id="a">321<span id="inner" b="inner">765</span>123</div><div id="c">555</div><p style="color: green; text-align: center;">I am content</p></header>'
     expect(node1.tagName).toBe('HEADER')
@@ -190,7 +196,7 @@ test('element: innerHTML/outerHTML', () => {
     expect(node1.childNodes[2].childNodes.length).toBe(1)
     expect(node1.childNodes[2].childNodes[0].textContent).toBe('I am content')
     expect(parentUpdateCount).toBe(2)
-    expect(node1UpdateCount).toBe(7)
+    expect(node1UpdateCount).toBe(8)
 
     node1.parentNode.addEventListener('$$childNodesUpdate', onParentUpdate)
     node1.addEventListener('$$childNodesUpdate', onNode1Update)
@@ -224,6 +230,11 @@ test('element: innerText/textContent', () => {
     expect(node1.innerHTML).toBe('<span>321</span>')
     expect(node1.innerText).toBe('<span>321</span>')
     expect(updateCount).toBe(2)
+
+    node1.innerHTML = '<span>321</span>'
+    expect(node1.childNodes.length).toBe(1)
+    node1.textContent = ''
+    expect(node1.childNodes.length).toBe(0)
 
     node1.removeEventListener('$$childNodesUpdate', onUpdate)
     document.body.removeChild(node1)
@@ -316,6 +327,8 @@ test('element: cloneNode', () => {
     node1.className = 'a b c'
     node1.style.display = 'block'
     node1.style.background = 'red'
+    node1.setAttribute('test', 123)
+    node1.setAttribute('mode', 'clone')
     const node2 = document.createElement('article')
     const node3 = document.createElement('span')
     const node4 = document.createElement('nav')
@@ -334,6 +347,8 @@ test('element: cloneNode', () => {
     expect(node7.id).toBe(node1.id)
     expect(node7.className).toBe(node1.className)
     expect(node7.style.cssText).toBe(node1.style.cssText)
+    expect(node7.getAttribute('test')).toBe(node1.getAttribute('test'))
+    expect(node7.getAttribute('mode')).toBe('clone')
     expect(node7.childNodes.length).toBe(0)
 
     const node8 = node1.cloneNode(true)
@@ -343,6 +358,8 @@ test('element: cloneNode', () => {
     expect(node8.id).toBe(node1.id)
     expect(node8.className).toBe(node1.className)
     expect(node8.style.cssText).toBe(node1.style.cssText)
+    expect(node8.getAttribute('test')).toBe(node1.getAttribute('test'))
+    expect(node8.getAttribute('mode')).toBe('clone')
     expect(node8.childNodes.length).toBe(node1.childNodes.length)
     expect(node8.childNodes[0]).not.toBe(node1.childNodes[0])
     expect(node8.childNodes[0].tagName).toBe(node1.childNodes[0].tagName)
@@ -501,6 +518,11 @@ test('node: getElementsByTagName', () => {
 
     expect(document.getElementsByTagName('header').length).toBe(1)
     expect(node.getElementsByTagName('header').length).toBe(0)
+
+    expect(document.getElementsByTagName('wx-view').length).toBe(1)
+    expect(document.getElementsByTagName('wx-view')[0]).toBeInstanceOf(Element)
+    expect(document.getElementsByTagName('wx-text').length).toBe(1)
+    expect(document.getElementsByTagName('wx-text')[0]).toBeInstanceOf(Element)
 })
 
 test('node: getElementsByClassName', () => {
@@ -549,15 +571,17 @@ test('node: querySelectorAll', () => {
 })
 
 test('element: setAttribute/getAttribute/hasAttribute/removeAttribute', () => {
+    const parent = document.createElement('div')
     const node = document.createElement('div')
-    document.body.appendChild(node)
+    document.body.appendChild(parent)
+    parent.appendChild(node)
     const attributes = node.attributes
 
     let updateCount = 0
     const onUpdate = function() {
         updateCount++
     }
-    node.parentNode.addEventListener('$$childNodesUpdate', onUpdate)
+    parent.addEventListener('$$childNodesUpdate', onUpdate)
 
     expect(node.getAttribute('id')).toBe('')
     expect(node.getAttribute('class')).toBe('')
@@ -658,8 +682,128 @@ test('element: setAttribute/getAttribute/hasAttribute/removeAttribute', () => {
     expect(attributes.length).toEqual(2)
     expect(updateCount).toBe(14)
 
-    node.parentNode.removeEventListener('$$childNodesUpdate', onUpdate)
-    document.body.removeChild(node)
+    // kbone-attribute-map
+    const node2 = document.createElement('div')
+    node2.setAttribute('kbone-attribute-map', {
+        a: 123, b: 'haha', d: null, g: {c: 'hehe'}
+    })
+    expect(node2.getAttribute('kbone-attribute-map')).toEqual({
+        a: 123, b: 'haha', d: null, g: {c: 'hehe'}
+    })
+    expect(node2.getAttribute('a')).toBe('123')
+    expect(node2.getAttribute('b')).toBe('haha')
+    expect(node2.getAttribute('d')).toBe(null)
+    expect(node2.getAttribute('g')).toEqual({c: 'hehe'})
+    node2.setAttribute('kbone-attribute-map', {c: 'june', d: 321})
+    expect(node2.getAttribute('kbone-attribute-map')).toEqual({c: 'june', d: 321})
+    expect(node2.getAttribute('a')).toBe(undefined)
+    expect(node2.getAttribute('b')).toBe(undefined)
+    expect(node2.getAttribute('c')).toBe('june')
+    expect(node2.getAttribute('d')).toBe('321')
+    expect(node2.getAttribute('g')).toEqual(undefined)
+    node2.setAttribute('kbone-attribute-map', '{"c": 111, "d": "oh my god", "h": {"a": 123}}')
+    expect(node2.getAttribute('c')).toBe('111')
+    expect(node2.getAttribute('d')).toBe('oh my god')
+    expect(node2.getAttribute('h')).toEqual({a: 123})
+    node2.setAttribute('kbone-attribute-map', {})
+    expect(node2.getAttribute('c')).toBe(undefined)
+    expect(node2.getAttribute('d')).toBe(undefined)
+    expect(node2.getAttribute('h')).toBe(undefined)
+
+    // kbone-event-map
+    const node3 = document.createElement('div')
+    let tapCount = 0
+    let longTapCount = 0
+    const onTap = () => tapCount++
+    const onLongTap = () => longTapCount++
+    window.haha = onTap
+    window.hehe = onLongTap
+    node3.$$trigger('tap')
+    node3.$$trigger('longtap')
+    expect(tapCount).toBe(0)
+    expect(longTapCount).toBe(0)
+    node3.setAttribute('kbone-event-map', {tap: onTap, longtap: onLongTap})
+    node3.$$trigger('tap')
+    node3.$$trigger('longtap')
+    expect(tapCount).toBe(1)
+    expect(longTapCount).toBe(1)
+    node3.setAttribute('kbone-event-map', {tap: onTap})
+    node3.$$trigger('tap')
+    node3.$$trigger('longtap')
+    expect(tapCount).toBe(2)
+    expect(longTapCount).toBe(1)
+    node3.setAttribute('kbone-event-map', '{"longtap": "hehe"}')
+    node3.$$trigger('tap')
+    node3.$$trigger('longtap')
+    expect(tapCount).toBe(2)
+    expect(longTapCount).toBe(2)
+    node3.setAttribute('kbone-event-map', '{"tap": "haha", "longtap": "hehe"}')
+    node3.$$trigger('tap')
+    node3.$$trigger('longtap')
+    expect(tapCount).toBe(3)
+    expect(longTapCount).toBe(3)
+    node3.setAttribute('kbone-event-map', {tap: 'haha'})
+    node3.$$trigger('tap')
+    node3.$$trigger('longtap')
+    expect(tapCount).toBe(4)
+    expect(longTapCount).toBe(3)
+    node3.setAttribute('kbone-event-map', {})
+    node3.$$trigger('tap')
+    node3.$$trigger('longtap')
+    expect(tapCount).toBe(4)
+    expect(longTapCount).toBe(3)
+
+    parent.removeEventListener('$$childNodesUpdate', onUpdate)
+    document.body.removeChild(parent)
+})
+
+test('element: setAttributeNS/getAttributeNS/hasAttributeNS/removeAttributeNS', () => {
+    const ns = 'http://www.example.com/2014/test'
+    const parent = document.createElement('div')
+    const node = document.createElement('div')
+    document.body.appendChild(parent)
+    parent.appendChild(node)
+    const attributes = node.attributes
+
+    let updateCount = 0
+    const onUpdate = function() {
+        updateCount++
+    }
+    parent.addEventListener('$$childNodesUpdate', onUpdate)
+
+    expect(node.getAttributeNS(ns, 'src')).toBe(undefined)
+    expect(node.hasAttributeNS(ns, 'src')).toBe(false)
+    expect(attributes).toEqual([])
+    expect(attributes.src).toBe(undefined)
+    expect(updateCount).toBe(0)
+
+    // eslint-disable-next-line no-script-url
+    node.src = 'javascript: void(0);'
+    // eslint-disable-next-line no-script-url
+    expect(node.getAttributeNS(ns, 'src')).toBe('javascript: void(0);')
+    expect(node.hasAttributeNS(ns, 'src')).toBe(true)
+    expect(attributes.length).toBe(1)
+    expect(attributes.src).toBe(attributes[0])
+    // eslint-disable-next-line no-script-url
+    expect(attributes.src).toEqual({name: 'src', value: 'javascript: void(0);'})
+    expect(updateCount).toBe(1)
+
+    node.setAttributeNS(ns, 'src', 'moc.haha.www')
+    expect(node.src).toBe('moc.haha.www')
+    expect(attributes.length).toEqual(1)
+    expect(attributes.src).toBe(attributes[0])
+    expect(attributes.src).toEqual({name: 'src', value: 'moc.haha.www'})
+    expect(updateCount).toBe(2)
+
+    node.removeAttributeNS(ns, 'src')
+    expect(node.src).toBe(undefined)
+    expect(node.getAttributeNS(ns, 'src')).toBe(undefined)
+    expect(node.hasAttributeNS(ns, 'src')).toBe(false)
+    expect(attributes.src).toBe(undefined)
+    expect(updateCount).toBe(3)
+
+    parent.removeEventListener('$$childNodesUpdate', onUpdate)
+    document.body.removeChild(parent)
 })
 
 test('element: contains', () => {

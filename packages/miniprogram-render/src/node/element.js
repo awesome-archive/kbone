@@ -47,6 +47,9 @@ class Element extends Node {
         this.$_style = null
         this.$_attrs = null
 
+        this.$$scrollTop = 0
+        this.$$scrollTimeStamp = 0 // 最近一次滚动事件触发的时间戳
+
         this.$_initAttrs(options.attrs)
 
         // 补充实例的属性，用于 'xxx' in XXX 判断
@@ -74,6 +77,12 @@ class Element extends Node {
         this.$_classList = null
         this.$_style = null
         this.$_attrs = null
+
+        this._wxComponent = null
+        this._wxCustomComponent = null
+
+        this.$$scrollTop = 0
+        this.$$scrollTimeStamp = 0
     }
 
     /**
@@ -222,18 +231,19 @@ class Element extends Node {
             let html = `<${tagName}`
 
             // 属性
-            if (node.id) html += ` id="${node.id}"`
-            if (node.className) html += ` class="${node.className}"`
+            if (node.behavior) html += ` behavior="${tool.escapeForHtmlGeneration(node.behavior)}"`
+            if (node.id) html += ` id="${tool.escapeForHtmlGeneration(node.id)}"`
+            if (node.className) html += ` class="${tool.escapeForHtmlGeneration(node.className)}"`
 
             const styleText = node.style.cssText
-            if (styleText) html += ` style="${styleText}"`
+            if (styleText) html += ` style="${tool.escapeForHtmlGeneration(styleText)}"`
 
             const src = node.src
-            if (src) html += ` src=${src}`
+            if (src) html += ` src=${tool.escapeForHtmlGeneration(src)}`
 
             const dataset = node.dataset
             Object.keys(dataset).forEach(name => {
-                html += ` data-${tool.toDash(name)}="${dataset[name]}"`
+                html += ` data-${tool.toDash(name)}="${tool.escapeForHtmlGeneration(dataset[name])}"`
             })
 
             html = this.$$dealWithAttrsForGenerateHtml(html, node)
@@ -292,6 +302,9 @@ class Element extends Node {
             return this.ownerDocument.$$createTextNode({
                 content: tool.decodeContent(content), nodeId
             })
+        } else if (type === 'comment') {
+            // 注释
+            return this.ownerDocument.createComment()
         }
     }
 
@@ -305,8 +318,9 @@ class Element extends Node {
             type: this.$_type,
             tagName: this.$_tagName,
             id: this.id,
-            class: this.className,
+            className: this.className,
             style: this.$__style ? this.style.cssText : '',
+            slot: this.getAttribute('slot'),
         }
     }
 
@@ -315,6 +329,27 @@ class Element extends Node {
      */
     get $$isUnary() {
         return this.$_unary
+    }
+
+    /**
+     * 所属小程序自定义组件实例
+     */
+    get $$wxComponent() {
+        return this._wxComponent
+    }
+
+    /**
+     * 如果该节点是第三方自定义组件，返回对应的实例
+     */
+    get $$wxCustomComponent() {
+        return this._wxCustomComponent
+    }
+
+    /**
+     * 获取子节点列表
+     */
+    get $$children() {
+        return this.$_children
     }
 
     /**
@@ -352,9 +387,9 @@ class Element extends Node {
             if (!window) reject()
 
             if (this.tagName === 'BODY') {
-                window.$$createSelectorQuery().selectViewport().scrollOffset(res => (res ? resolve(res) : reject())).exec()
+                window.$$createSelectorQuery().selectViewport().scrollOffset(res => (res ? resolve(res) : reject(new Error('body not found in webview')))).exec()
             } else {
-                window.$$createSelectorQuery().select(`.miniprogram-root >>> .node-${this.$_nodeId}`).boundingClientRect(res => (res ? resolve(res) : reject())).exec()
+                window.$$createSelectorQuery().select(`.miniprogram-root >>> .node-${this.$_nodeId}`).boundingClientRect(res => (res ? resolve(res) : reject(new Error('element not found in webview')))).exec()
             }
         })
     }
@@ -370,7 +405,7 @@ class Element extends Node {
 
             if (this.tagName === 'CANVAS') {
                 // TODO，为了兼容基础库的一个 bug，暂且如此实现
-                wx.createSelectorQuery().in(this._wxComponent).select(`.node-${this.$_nodeId}`).context(res => (res && res.context ? resolve(res.context) : reject()))
+                wx.createSelectorQuery().in(this.$$wxComponent).select(`.node-${this.$_nodeId}`).context(res => (res && res.context ? resolve(res.context) : reject()))
                     .exec()
             } else {
                 window.$$createSelectorQuery().select(`.miniprogram-root >>> .node-${this.$_nodeId}`).context(res => (res && res.context ? resolve(res.context) : reject())).exec()
@@ -390,7 +425,7 @@ class Element extends Node {
 
             if (this.tagName === 'CANVAS') {
                 // TODO，为了兼容基础库的一个 bug，暂且如此实现
-                resolve(wx.createSelectorQuery().in(this._wxComponent).select(`.node-${this.$_nodeId}`))
+                resolve(wx.createSelectorQuery().in(this.$$wxComponent).select(`.node-${this.$_nodeId}`))
             } else {
                 resolve(window.$$createSelectorQuery().select(`.miniprogram-root >>> .node-${this.$_nodeId}`))
             }
@@ -401,9 +436,43 @@ class Element extends Node {
      * 设置属性，但不触发更新
      */
     $$setAttributeWithoutUpdate(name, value) {
+        if (typeof name !== 'string') return
+
         this.$_notTriggerUpdate = true
-        this.setAttribute(name, value)
+        this.$_attrs.set(name, value)
         this.$_notTriggerUpdate = false
+    }
+
+    /**
+     * 关键帧/滚动驱动动画接口
+     * https://developers.weixin.qq.com/miniprogram/dev/framework/view/animation.html
+     */
+    $$animate(...args) {
+        const wxComponent = this.$$wxCustomComponent || this.$$wxComponent
+        if (!wxComponent) {
+            console.error('this element has not been attached yet')
+        } else {
+            if (typeof args[2] === 'object' && args[2].scrollSource) {
+                args[2].scrollSource = `.miniprogram-root >>> ${args[2].scrollSource}`
+            }
+            wxComponent.animate(`.node-${this.$_nodeId}`, ...args)
+        }
+    }
+
+    /**
+     * 关键帧/滚动驱动动画清除接口
+     * https://developers.weixin.qq.com/miniprogram/dev/framework/view/animation.html
+     */
+    $$clearAnimation(...args) {
+        const wxComponent = this.$$wxCustomComponent || this.$$wxComponent
+        if (!wxComponent) {
+            console.error('this element has not been attached yet')
+        } else {
+            if (typeof args[2] === 'object' && args[2].scrollSource) {
+                args[2].scrollSource = `.miniprogram-root >>> ${args[2].scrollSource}`
+            }
+            wxComponent.clearAnimation(`.node-${this.$_nodeId}`, ...args)
+        }
     }
 
     /**
@@ -606,12 +675,6 @@ class Element extends Node {
     set textContent(text) {
         text = '' + text
 
-        // 空串不新增 textNode 节点
-        if (!text) return
-
-        const nodeId = `b-${tool.getId()}` // 运行时生成，使用 b- 前缀
-        const child = this.ownerDocument.$$createTextNode({content: text, nodeId})
-
         // 删除所有子节点
         this.$_children.forEach(node => {
             node.$$updateParent(null)
@@ -620,6 +683,12 @@ class Element extends Node {
             this.$_updateChildrenExtra(node, true)
         })
         this.$_children.length = 0
+
+        // 空串不新增 textNode 节点
+        if (!text) return
+
+        const nodeId = `b-${tool.getId()}` // 运行时生成，使用 b- 前缀
+        const child = this.ownerDocument.$$createTextNode({content: text, nodeId})
 
         this.appendChild(child)
     }
@@ -651,6 +720,20 @@ class Element extends Node {
         this.$_attrs.set('src', value)
     }
 
+    get scrollTop() {
+        // 只有配置了 windowScroll 才能拿到准确值；如果没有配置，则需要通过 document.body.$$getBoundingClientRect 来获取准确值
+        return this.$$scrollTop
+    }
+
+    set scrollTop(value) {
+        if (this.$_tagName !== 'html') return // 只有 document.documentElement 支持设置 scrollTop
+        if (+new Date() - this.$$scrollTimeStamp < 500) return // 为了兼容 mp-webpack-plugin@0.9.14 及以前的版本，在滚动事件触发后的 500ms 内，设置 scrollTop 不予处理
+
+        value = parseInt(value, 10)
+        wx.pageScrollTo({scrollTop: value, duration: 0})
+        this.$$scrollTop = value
+    }
+
     cloneNode(deep) {
         const dataset = {}
         Object.keys(this.$_dataset).forEach(name => {
@@ -671,6 +754,12 @@ class Element extends Node {
             nodeType: this.$_nodeType,
             nodeId: `b-${tool.getId()}`, // 运行时生成，使用 b- 前缀
         })
+
+        // 属性
+        if (this.$__attrs) {
+            const attrsMap = this.$_attrs.map
+            Object.keys(attrsMap).forEach(attrName => newNode.setAttribute(attrName, attrsMap[attrName]))
+        }
 
         if (deep) {
             // 深克隆
@@ -694,6 +783,8 @@ class Element extends Node {
         } else {
             nodes = [node]
         }
+
+        if (!nodes.length) hasUpdate = true // 列表为空也要触发 update，因为可能走 innerHTML 强行置空
 
         for (const node of nodes) {
             if (node === this) continue
@@ -862,7 +953,42 @@ class Element extends Node {
 
         // 保留对象/数组/布尔值/undefined 原始内容，方便处理小程序内置组件的使用
         const valueType = typeof value
-        if (valueType !== 'object' && valueType !== 'boolean' && value !== undefined && !Array.isArray(value)) value = '' + value
+        if (valueType !== 'object' && valueType !== 'boolean' && valueType !== 'function' && value !== undefined && !Array.isArray(value)) value = '' + value
+
+        if (name === 'kbone-attribute-map' || name === 'kbone-event-map') {
+            value = value || {}
+            if (typeof value === 'string') value = JSON.parse(value) // 确保存入的是对象
+            const oldValue = this.getAttribute(name)
+            const keys = Object.keys(value)
+            const oldKeys = oldValue ? Object.keys(oldValue) : null
+
+            if (name === 'kbone-attribute-map') {
+                // 特殊属性，用于批量设置属性
+                keys.forEach(key => this.setAttribute(key, value[key]))
+                if (oldKeys) {
+                    oldKeys.forEach(key => {
+                        if (!Object.prototype.hasOwnProperty.call(value, key)) this.removeAttribute(key)
+                    })
+                }
+            } else {
+                // 特殊属性，用于批量监听事件
+                const window = cache.getWindow(this.$_pageId)
+
+                if (oldKeys) {
+                    oldKeys.forEach(key => {
+                        // 先删除所有旧的 handler
+                        let handler = oldValue[key]
+                        handler = typeof handler !== 'function' ? window[handler] : handler
+                        this.removeEventListener(key, handler)
+                    })
+                }
+                keys.forEach(key => {
+                    let handler = value[key]
+                    handler = typeof handler !== 'function' ? window[handler] : handler
+                    this.addEventListener(key, handler)
+                })
+            }
+        }
 
         if (name === 'id') {
             // id 要提前到此处特殊处理
@@ -874,9 +1000,17 @@ class Element extends Node {
 
     getAttribute(name) {
         if (typeof name !== 'string') return ''
-        if (!this.$__attrs) return name === 'id' || name === 'style' || name === 'class' ? '' : undefined
+        if (name.indexOf('data-') === 0) {
+            // dataset 属性
+            const datasetName = tool.toCamel(name.substr(5))
+            if (!this.$__dataset) return undefined
 
-        return this.$_attrs.get(name)
+            return this.dataset[datasetName]
+        } else {
+            if (!this.$__attrs) return name === 'id' || name === 'style' || name === 'class' ? '' : undefined
+
+            return this.$_attrs.get(name)
+        }
     }
 
     hasAttribute(name) {
@@ -890,6 +1024,30 @@ class Element extends Node {
         if (typeof name !== 'string') return false
 
         return this.$_attrs.remove(name)
+    }
+
+    setAttributeNS(namespace, name, value) {
+        // 不支持 namespace，使用 setAttribute 来兼容
+        console.warn(`namespace ${namespace} is not supported`)
+        this.setAttribute(name, value)
+    }
+
+    getAttributeNS(namespace, name) {
+        // 不支持 namespace，使用 setAttribute 来兼容
+        console.warn(`namespace ${namespace} is not supported`)
+        return this.getAttribute(name)
+    }
+
+    hasAttributeNS(namespace, name) {
+        // 不支持 namespace，使用 setAttribute 来兼容
+        console.warn(`namespace ${namespace} is not supported`)
+        return this.hasAttribute(name)
+    }
+
+    removeAttributeNS(namespace, name) {
+        // 不支持 namespace，使用 setAttribute 来兼容
+        console.warn(`namespace ${namespace} is not supported`)
+        return this.removeAttribute(name)
     }
 
     contains(otherElement) {
@@ -911,7 +1069,10 @@ class Element extends Node {
     getBoundingClientRect() {
         // 不作任何实现，只作兼容使用
         console.warn('getBoundingClientRect is not supported, please use dom.$$getBoundingClientRect instead of it')
-        return {}
+        return {
+            left: 0,
+            top: 0,
+        }
     }
 }
 

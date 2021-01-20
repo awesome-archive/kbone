@@ -21,6 +21,7 @@ class Event {
         this.$_currentTarget = options.currentTarget || options.target
         this.$_eventPhase = options.eventPhase || Event.NONE
         this.$_detail = options.detail || null
+        this.$_immediateStop = false
         this.$_canBubble = true
         this.$_bubbles = options.bubbles || false
         this.$_touches = null
@@ -41,12 +42,24 @@ class Event {
             this.$_touches = options.touches.map(touch => ({...touch, target: options.target}))
 
             this.$$checkTargetTouches()
+        } else if (options.touches) {
+            this.$_touches = []
+            this.$_targetTouches = []
         }
 
         // 处理 changedTouches
         if (options.changedTouches && options.changedTouches.length) {
             this.$_changedTouches = options.changedTouches.map(touch => ({...touch, target: options.target}))
+        } else if (options.changedTouches) {
+            this.$_changedTouches = []
         }
+    }
+
+    /**
+     * 返回事件是否立即停止
+     */
+    get $$immediateStop() {
+        return this.$_immediateStop
     }
 
     /**
@@ -139,13 +152,20 @@ class Event {
     }
 
     preventDefault() {
-    // 目前仅支持 a 标签的点击阻止
+        // 目前仅支持 a 标签的点击阻止
         this.$_cancelable = true
     }
 
     stopPropagation() {
         if (this.eventPhase === Event.NONE) return
 
+        this.$_canBubble = false
+    }
+
+    stopImmediatePropagation() {
+        if (this.eventPhase === Event.NONE) return
+
+        this.$_immediateStop = true
         this.$_canBubble = false
     }
 
