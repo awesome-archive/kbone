@@ -5,16 +5,37 @@
       <li><router-link class="link" to="/test/bbb">bbb</router-link></li>
     </ul>
     <router-view></router-view>
+    <button class="btn" @click="consoleGlobal">console global</button>
     <button class="btn" @click="throwError">throw an error</button>
+    <button class="btn" @click="throwPromiseError">throw an promise error</button>
+    <button class="btn" @click="throwNativeError">throw a native error</button>
+    <button class="btn" ref="btn" @click="updateStyle">update style</button>
+    <button class="btn" @tap="log('tap')" @click="log('click')" @longpress="log('longpress')">only click</button>
+    <button class="btn css-var" ref="btn2" @click="updateCssVar">更新文本颜色（css 变量）</button>
     <div style="margin-left: 20px;">
       <p>这是<span>1</span>段中间插入了span的文本</p>
     </div>
+    <div style="margin: 20px;">
+      <p style="width: 10rem;">这段看起来特别特别长的文字宽度是 10 rem，测试测试测试测试测试测试测试测试测试测试测试测试</p>
+    </div>
+    <div @click="log('tap')" @longpress="log('longpress')">
+      <div @click="log('tap')">
+        <div @click="log('tap')" @longpress="log('longpress')">测试点击1</div>
+        <div @click="log('tap')">测试点击2</div>
+      </div>
+    </div>
+    <div @click="log('tap')">测试点击3</div>
     <Footer/>
   </div>
 </template>
 
 <script>
 import Footer from '../common/Footer.vue'
+
+const tempDiv = document.createElement('div')
+tempDiv.addEventListener('nativeError', () => {
+  throw new Error('native error')
+})
 
 export default {
   name: 'App',
@@ -27,19 +48,78 @@ export default {
     console.log(TEST_VAR_BOOL)
     console.log(TEST_VAR_FUNCTION)
     console.log(TEST_VAR_OTHERS)
-    console.log(CustomEvent)
+    console.log(open)
+    console.log('self --> ', self)
+    console.log('HTMLElement --> ', HTMLElement)
+    console.log('Element --> ', Element)
+    console.log('Node --> ', Node)
+    console.log('localStorage --> ', localStorage)
+    console.log('sessionStorage --> ', sessionStorage)
+    console.log('navigator --> ', navigator)
+    console.log('history --> ', history)
+    console.log('location --> ', location)
+    console.log('performance --> ', performance)
+    console.log('Image --> ', Image)
+    console.log('CustomEvent --> ', CustomEvent)
+    console.log('Event --> ', Event)
+    console.log('requestAnimationFrame --> ', requestAnimationFrame)
+    console.log('cancelAnimationFrame --> ', cancelAnimationFrame)
+
+    // cookie
+    console.log('before set cookie', document.cookie)
+    document.cookie = `time=${+new Date()}; expires=Wed Jan 01 2220 00:00:00 GMT+0800; path=/`
+    console.log('after set cookie', document.cookie)
   },
   methods: {
+    log(...args) {
+      console.log(...args)
+    },
+  
+    consoleGlobal() {
+      console.log('global: ', global) // 如果配置了 node.global = false，则可以拿到小程序的 global，默认是 window 对象
+    },
+
     throwError() {
       setTimeout(() => {
         throw new Error('I am an error')
       }, 0)
+    },
+
+    throwPromiseError() {
+      setTimeout(() => {
+        var promise = new Promise((resolve, reject) => {
+          reject('promise error')
+        })
+        promise.then(() => {})
+      }, 0)
+    },
+
+    throwNativeError() {
+      tempDiv.dispatchEvent(new CustomEvent('nativeError'))
+    },
+
+    updateStyle() {
+      if (this.$refs.btn.style.backgroundColor === '#000') {
+        this.$refs.btn.style.backgroundColor = '#dff1e7'
+        this.$refs.btn.style.color = '#000'
+      } else {
+        this.$refs.btn.style.backgroundColor = '#000'
+        this.$refs.btn.style.color = '#fff'
+      }
+    },
+
+    updateCssVar() {
+      const dom = this.$refs.btn2
+      dom.style.setProperty('--red-text', 'red')
     },
   },
 }
 </script>
 
 <style>
+:root {
+  --red-text: blue;
+}
 .tabbar {
   margin-top: 20px;
   padding: 0;
@@ -74,5 +154,8 @@ export default {
   font-size: 16px;
   background: #dff1e7;
   border-radius: 5px;
+}
+.css-var {
+  color: var(--red-text);
 }
 </style>

@@ -65,6 +65,13 @@ class Attribute {
     }
 
     /**
+     * 属性映射表
+     */
+    get map() {
+        return this.$_map
+    }
+
+    /**
      * 属性列表，需要动态更新
      */
     get list() {
@@ -80,7 +87,7 @@ class Attribute {
 
         if (name === 'id') {
             map.id = value
-        } else if (name === 'class') {
+        } else if (name === 'class' || (element.tagName === 'WX-COMPONENT' && name === 'className')) {
             element.className = value
         } else if (name === 'style') {
             element.style.cssText = value
@@ -97,6 +104,11 @@ class Attribute {
             }
 
             map[name] = value
+
+            // canvas 如果有 node 对象，需要将 width/height 设置进去
+            if ((name === 'width' || name === 'height') && element.tagName === 'CANVAS' && element.$$node) {
+                element.$$node[name] = value
+            }
 
             // 其他字段的设置需要触发父组件更新
             this.$_doUpdate()

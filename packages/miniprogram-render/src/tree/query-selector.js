@@ -1,6 +1,7 @@
 /**
  * 感谢 sizzle：https://github.com/jquery/sizzle/tree/master
  */
+const tool = require('../util/tool')
 
 const PSEUDO_CHECK = {
     checked: node => node.checked || node.selected,
@@ -13,12 +14,19 @@ const PSEUDO_CHECK = {
         const {a, b} = param
         const index = children.indexOf(node) + 1
 
-        if (a) {
-            return (index - b) % a === 0
-        } else {
-            return index === b
-        }
+        return a ? ((index - b) % a === 0) : (index === b)
     },
+    'nth-of-type': (node, param, rule) => {
+        const copyRule = Object.assign({}, rule)
+        copyRule.pseudo = undefined
+
+        // 找出所有命中除了 nth-of-type 规则之外其他全部规则的兄弟元素
+        const children = Array.from(node.parentNode.children).filter(child => checkHit(child, copyRule))
+        const {a, b} = param
+        const index = children.indexOf(node) + 1
+
+        return a ? ((index - b) % a === 0) : (index === b)
+    }
 }
 
 const ATTR_CHECK = {
@@ -101,14 +109,19 @@ function checkHit(node, rule) {
 
     // 标签选择器
     if (tag && tag !== '*') {
-        if (node.tagName !== tag.toUpperCase()) return false
+        if (tool.checkIsWxComponent(tag.toLowerCase(), false)) {
+            // 内置组件
+            if (node.tagName !== 'WX-COMPONENT' || node.behavior !== tag.slice(3).toLowerCase()) return false
+        } else if (node.tagName !== tag.toUpperCase()) {
+            return false
+        }
     }
 
     // 伪类选择器
     if (pseudo) {
         for (const {name, param} of pseudo) {
             const checkPseudo = PSEUDO_CHECK[name]
-            if (!checkPseudo || !checkPseudo(node, param)) return false
+            if (!checkPseudo || !checkPseudo(node, param, rule)) return false
         }
     }
 
@@ -117,7 +130,7 @@ function checkHit(node, rule) {
         for (const {name, opr, val} of attr) {
             const nodeVal = node[name] || node.getAttribute(name)
 
-            if (nodeVal === undefined) return false
+            if (nodeVal === undefined || nodeVal === null) return false
             if (opr) {
                 // 存在操作符
                 const checkAttr = ATTR_CHECK[opr]
@@ -191,7 +204,7 @@ class QuerySelector {
         this.parseCacheKeys = []
 
         const idReg = '#([\\\\\\w-]+)' // id 选择器
-        const tagReg = '\\*|wx-component|[a-zA-Z-]\\w*' // 标签选择器
+        const tagReg = '\\*|wx-component|[a-zA-Z-]+\\w*' // 标签选择器
         const classReg = '\\.([\\\\\\w-]+)' // 类选择器
         const pseudoReg = ':([\\\\\\w-]+)(?:\\(([^\\(\\)]*|(?:\\([^\\)]+\\)|[^\\(\\)]*)+)\\))?' // 伪类选择器
         const attrReg = '\\[\\s*([\\\\\\w-]+)(?:([*^$|~!]?=)[\'"]?([^\'"\\[]+)[\'"]?)?\\s*\\]' // 属性选择器
@@ -249,7 +262,7 @@ class QuerySelector {
                 const pseudo = {name: pseudoName}
 
                 if (pseudoParam) pseudoParam = pseudoParam.trim()
-                if (pseudoName === 'nth-child') {
+                if (pseudoName === 'nth-child' || pseudoName === 'nth-of-type') {
                     // 处理 nth-child 伪类，参数统一处理成 an + b 的格式
                     pseudoParam = pseudoParam.replace(/\s+/g, '')
 
@@ -359,8 +372,8 @@ class QuerySelector {
                 }
             }
         } else if (tag && tag !== '*') {
-            // 标签选择器，查询指定标签
-            const tagName = tag.toUpperCase()
+            // 标签选择器，查询指定标签，支持内置组件
+            const tagName = tool.checkIsWxComponent(tag.toLowerCase(), false) ? 'WX-COMPONENT' : tag.toUpperCase()
             const tagNodes = tagMap[tagName]
             if (tagNodes) hitNodes = tagNodes
         } else {

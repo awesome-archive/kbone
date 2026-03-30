@@ -32,6 +32,10 @@ class EventTarget {
         this.ontouchmove = null
         this.ontouchend = null
         this.ontouchcancel = null
+        this.oninput = null
+        this.onfocus = null
+        this.onblur = null
+        this.onchange = null
 
         this.$_miniprogramEvent = null // 记录已触发的小程序事件
         this.$_eventHandlerMap = null
@@ -68,14 +72,17 @@ class EventTarget {
     static $$process(target, eventName, miniprogramEvent, extra, callback) {
         let event
 
-        if (eventName instanceof CustomEvent) {
-            // 传入的是自定义事件
+        if (eventName instanceof CustomEvent || eventName instanceof Event) {
+            // 传入的是事件对象
             event = eventName
             eventName = event.type
+            event.$$setTarget(target)
         }
 
         eventName = eventName.toLowerCase()
 
+        const document = target.ownerDocument
+        const window = document ? document.defaultView : null
         const path = [target]
         let parentNode = target.parentNode
 
@@ -87,6 +94,11 @@ class EventTarget {
         if (path[path.length - 1].tagName === 'BODY') {
             // 如果最后一个节点是 document.body，则追加 document.documentElement
             path.push(parentNode)
+
+            if (eventName.indexOf('touch') === 0) {
+                // touch 系列事件冒泡到 window
+                path.push(window)
+            }
         }
 
         if (!event) {
@@ -94,31 +106,34 @@ class EventTarget {
             event = new Event({
                 name: eventName,
                 target,
-                timeStamp: miniprogramEvent.timeStamp,
+                timeStamp: window ? window.performance.now() : miniprogramEvent.timeStamp,
                 touches: miniprogramEvent.touches,
                 changedTouches: miniprogramEvent.changedTouches,
-                bubbles: true, // 默认都可以冒泡 TODO
+                bubbles: true, // 默认都可以冒泡
                 $$extra: extra,
             })
+            // 保留原始事件的 detail
+            if (miniprogramEvent.detail) event.detail = Object.assign({}, miniprogramEvent.detail, event.detail || {})
         }
 
-        if (event.bubbles) {
-            // 捕获
-            for (let i = path.length - 1; i >= 0; i--) {
-                const currentTarget = path[i]
+        // 捕获
+        for (let i = path.length - 1; i >= 0; i--) {
+            const currentTarget = path[i]
 
-                if (!event.$$canBubble) break // 判定冒泡是否结束
-                if (currentTarget === target) continue
+            if (!event.$$canBubble) break // 判定冒泡是否结束
+            if (currentTarget === target) continue
 
-                event.$$setCurrentTarget(currentTarget)
-                event.$$setEventPhase(Event.CAPTURING_PHASE)
+            // wx-capture 节点事件单独触发
+            if (currentTarget.tagName === 'WX-COMPONENT' && currentTarget.behavior === 'capture') continue
 
-                currentTarget.$$trigger(eventName, {
-                    event,
-                    isCapture: true,
-                })
-                if (callback) callback(currentTarget, event, true)
-            }
+            event.$$setCurrentTarget(currentTarget)
+            event.$$setEventPhase(Event.CAPTURING_PHASE)
+
+            currentTarget.$$trigger(eventName, {
+                event,
+                isCapture: true,
+            })
+            if (callback) callback(currentTarget, event, true)
         }
 
         // 目标
@@ -130,12 +145,14 @@ class EventTarget {
             target.$$trigger(eventName, {
                 event,
                 isCapture: true,
+                isTarget: true,
             })
             if (callback) callback(target, event, true)
 
             target.$$trigger(eventName, {
                 event,
                 isCapture: false,
+                isTarget: true,
             })
             if (callback) callback(target, event, false)
         }
@@ -146,6 +163,9 @@ class EventTarget {
                 if (!event.$$canBubble) break // 判定冒泡是否结束
                 if (currentTarget === target) continue
 
+                // wx-capture 节点事件单独触发
+                if (currentTarget.tagName === 'WX-COMPONENT' && currentTarget.behavior === 'capture') continue
+
                 event.$$setCurrentTarget(currentTarget)
                 event.$$setEventPhase(Event.BUBBLING_PHASE)
 
@@ -154,12 +174,17 @@ class EventTarget {
                     isCapture: false,
                 })
                 if (callback) callback(currentTarget, event, false)
+
+                // wx-catch 节点事件要结束冒泡
+                if (currentTarget.tagName === 'WX-COMPONENT' && currentTarget.behavior === 'catch') event.stopPropagation()
             }
         }
 
         // 重置事件
         event.$$setCurrentTarget(null)
         event.$$setEventPhase(Event.NONE)
+
+        return event
     }
 
     /**
@@ -187,19 +212,68 @@ class EventTarget {
     /**
      * 触发节点事件
      */
-    $$trigger(eventName, {event, args = [], isCapture} = {}) {
+    $$trigger(eventName, {
+        event, args = [], isCapture, isTarget
+    } = {}) {
         eventName = eventName.toLowerCase()
         const handlers = this.$_getHandlers(eventName, isCapture)
         const onEventName = `on${eventName}`
 
-        if (typeof this[onEventName] === 'function') {
-            // 触发 onXXX 绑定的事件
-            this[onEventName].call(this || null, event, ...args)
+        if (!event) {
+            const document = this.ownerDocument
+            const window = document ? document.defaultView : null
+            event = new Event({
+                timeStamp: window ? window.performance.now() : Date.now(),
+                touches: [],
+                changedTouches: [],
+                name: eventName,
+                target: this,
+                eventPhase: Event.AT_TARGET,
+            })
         }
 
-        if (handlers && handlers.length) {
-            // 触发 addEventListener 绑定的事件
-            handlers.forEach(handler => handler.call(this || null, event, ...args))
+        if ((!isCapture || !isTarget) && typeof this[onEventName] === 'function') {
+            // 触发 onXXX 绑定的事件
+            if (event && event.$$immediateStop) return
+            try {
+                event.returnValue = this[onEventName].call(this || null, event, ...args)
+            } catch (err) {
+                console.error(err)
+                this.$$triggerWindowError(err)
+            }
+        }
+
+        if (!handlers) return
+
+        // 触发 addEventListener 绑定的事件
+        if (handlers.length) {
+            [...handlers].forEach(handler => {
+                if (event && event.$$immediateStop) return
+                try {
+                    handler.call(this || null, event, ...args)
+                } catch (err) {
+                    console.error(err)
+                    this.$$triggerWindowError(err)
+                }
+            })
+        }
+
+        // 触发 addEventListener 绑定到命名空间下的事件
+        if (handlers._namespace) {
+            Object.keys(handlers._namespace).forEach(namespace => {
+                const namespaceHandlers = handlers._namespace[namespace]
+                if (namespaceHandlers && namespaceHandlers.length) {
+                    [...namespaceHandlers].forEach(handler => {
+                        if (event && event.$$immediateStop) return
+                        try {
+                            handler.call(this || null, event, ...args)
+                        } catch (err) {
+                            console.error(err)
+                            this.$$triggerWindowError(err)
+                        }
+                    })
+                }
+            })
         }
     }
 
@@ -240,13 +314,48 @@ class EventTarget {
     /**
      * 清空某个事件的所有句柄
      */
-    $$clearEvent(eventName, isCapture = false) {
+    $$clearEvent(eventName, options) {
         if (typeof eventName !== 'string') return
+
+        let isCapture = false
+        let namespace = null
+
+        if (typeof options === 'boolean') isCapture = options
+        else if (typeof options === 'object') {
+            isCapture = !!options.capture
+            namespace = options.$$namespace
+        }
 
         eventName = eventName.toLowerCase()
         const handlers = this.$_getHandlers(eventName, isCapture)
 
-        if (handlers && handlers.length) handlers.length = 0
+        if (!handlers) return
+
+        if (handlers.length) handlers.length = 0
+        if (handlers._namespace) handlers._namespace[namespace] = null
+    }
+
+    /**
+     * 是否存在事件句柄，只考虑通过 addEventListener 绑定的句柄
+     */
+    $$hasEventHandler(eventName) {
+        eventName = eventName.toLowerCase()
+        const bubbleHandlers = this.$_getHandlers(eventName, false)
+        const captureHandlers = this.$_getHandlers(eventName, true)
+        return (bubbleHandlers && bubbleHandlers.length) || (captureHandlers && captureHandlers.length)
+    }
+
+    /**
+     * 触发 window error 事件
+     */
+    $$triggerWindowError(err) {
+        const document = this.ownerDocument
+        const window = document ? document.defaultView : null
+        if (window) {
+            window.$$trigger('error', {
+                event: err,
+            })
+        }
     }
 
     /**
@@ -256,23 +365,54 @@ class EventTarget {
         if (typeof eventName !== 'string' || typeof handler !== 'function') return
 
         let isCapture = false
+        let namespace = null
 
         if (typeof options === 'boolean') isCapture = options
-        else if (typeof options === 'object') isCapture = options.capture
+        else if (typeof options === 'object') {
+            isCapture = !!options.capture
+            namespace = options.$$namespace
+        }
 
         eventName = eventName.toLowerCase()
         const handlers = this.$_getHandlers(eventName, isCapture, true)
 
-        handlers.push(handler)
+        if (namespace) {
+            // 存在命名空间
+            handlers._namespace = handlers._namespace || {}
+            handlers._namespace[namespace] = handlers._namespace[namespace] || []
+            handlers._namespace[namespace].push(handler)
+        } else {
+            handlers.push(handler)
+        }
     }
 
-    removeEventListener(eventName, handler, isCapture = false) {
+    removeEventListener(eventName, handler, options) {
         if (typeof eventName !== 'string' || typeof handler !== 'function') return
 
-        eventName = eventName.toLowerCase()
-        const handlers = this.$_getHandlers(eventName, isCapture)
+        let isCapture = false
+        let namespace = null
 
-        if (handlers && handlers.length) handlers.splice(handlers.indexOf(handler), 1)
+        if (typeof options === 'boolean') isCapture = options
+        else if (typeof options === 'object') {
+            isCapture = !!options.capture
+            namespace = options.$$namespace
+        }
+
+        eventName = eventName.toLowerCase()
+        const handlers = this.$_getHandlers(eventName, isCapture, false)
+
+        if (!handlers) return
+
+        if (namespace) {
+            // 存在命名空间
+            if (!handlers._namespace || !handlers._namespace[namespace]) return
+
+            const index = handlers._namespace[namespace].indexOf(handler)
+            if (index >= 0) handlers._namespace[namespace].splice(index, 1)
+        } else {
+            const index = handlers.indexOf(handler)
+            if (index >= 0) handlers.splice(index, 1)
+        }
     }
 
     dispatchEvent(evt) {

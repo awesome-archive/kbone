@@ -5,7 +5,7 @@ test('open-data', async() => {
     const componentId = _.load({
         template: `<element class="h5-body" style="width: 100%; height: 100%;" data-private-node-id="e-body" data-private-page-id="${page.pageId}"></element>`,
         usingComponents: {
-            element: _.load('index', 'element'),
+            element: _.elementId,
         },
     }, 'page')
     const component = _.render(componentId)
@@ -20,16 +20,24 @@ test('open-data', async() => {
     node.setAttribute('behavior', 'open-data')
     page.document.body.appendChild(node)
     await _.sleep(10)
-    const openData = body.querySelector('.h5-wx-component')
 
     // type
-    await _.checkString(openData, node, 'type', 'type', '')
+    await _.checkString(body, node, 'type', 'type', '')
 
     // openGid
-    await _.checkString(openData, node, 'openGid', 'open-gid', '')
+    await _.checkString(body, node, 'openGid', 'open-gid', '')
 
     // lang
-    await _.checkString(openData, node, 'lang', 'lang', 'en')
+    await _.checkString(body, node, 'lang', 'lang', 'en')
+
+    // defaultText
+    await _.checkString(body, node, 'defaultText', 'default-text', '')
+
+    // defaultAvatar
+    await _.checkString(body, node, 'defaultAvatar', 'default-avatar', '')
+
+    // event
+    await _.checkEvent(body.querySelector('.h5-wx-component'), node, ['error'])
 
     page.document.body.removeChild(node)
     document.body.removeChild(wrapper)

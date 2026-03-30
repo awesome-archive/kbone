@@ -5,7 +5,7 @@ test('picker', async() => {
     const componentId = _.load({
         template: `<element class="h5-body" style="width: 100%; height: 100%;" data-private-node-id="e-body" data-private-page-id="${page.pageId}"></element>`,
         usingComponents: {
-            element: _.load('index', 'element'),
+            element: _.elementId,
         },
     }, 'page')
     const component = _.render(componentId)
@@ -20,16 +20,15 @@ test('picker', async() => {
     node.setAttribute('behavior', 'icon')
     page.document.body.appendChild(node)
     await _.sleep(10)
-    const icon = body.querySelector('.h5-wx-component')
 
     // type
-    await _.checkString(icon, node, 'type', 'type', '')
+    await _.checkString(body, node, 'type', 'type', '')
 
     // size
-    await _.checkString(icon, node, 'size', 'size', '23')
+    await _.checkString(body, node, 'size', 'size', '23')
 
     // color
-    await _.checkString(icon, node, 'color', 'color', '')
+    await _.checkString(body, node, 'color', 'color', '')
 
     page.document.body.removeChild(node)
     document.body.removeChild(wrapper)

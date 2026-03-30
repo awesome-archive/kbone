@@ -5,7 +5,7 @@ test('web-view', async() => {
     const componentId = _.load({
         template: `<element class="h5-body" style="width: 100%; height: 100%;" data-private-node-id="e-body" data-private-page-id="${page.pageId}"></element>`,
         usingComponents: {
-            element: _.load('index', 'element'),
+            element: _.elementId,
         },
     }, 'page')
     const component = _.render(componentId)
@@ -20,14 +20,12 @@ test('web-view', async() => {
     node.setAttribute('behavior', 'web-view')
     page.document.body.appendChild(node)
     await _.sleep(10)
-    const webView = body.querySelector('.h5-wx-component')
 
     // src
-    await _.checkUrl(webView, node, 'src', 'src', '')
+    await _.checkUrl(body, node, 'src', 'src', '')
 
     // event
-    const wxWebView = webView.querySelector('.wx-comp-web-view')
-    await _.checkEvent(wxWebView, node, ['message', 'load', 'error'])
+    await _.checkEvent(body.querySelector('.h5-wx-component'), node, ['message', 'load', 'error'])
 
     page.document.body.removeChild(node)
     document.body.removeChild(wrapper)

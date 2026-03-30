@@ -2,7 +2,7 @@
  * 检查节点间的关系
  */
 function checkRelation(node1, node2) {
-    if (node1 === node2) return true
+    if ((node2 && node2.$$isWindow) || node1 === node2) return true
 
     while (node1) {
         if (node1 === node2) return true
@@ -13,6 +13,9 @@ function checkRelation(node1, node2) {
     return false
 }
 
+/**
+ * 因为一些历史遗留原因，此处 Event 入参并未对齐标准实现，开发者如有需要可使用 CustomEvent 来代替
+ */
 class Event {
     constructor(options) {
         this.$_name = options.name.toLowerCase()
@@ -21,12 +24,14 @@ class Event {
         this.$_currentTarget = options.currentTarget || options.target
         this.$_eventPhase = options.eventPhase || Event.NONE
         this.$_detail = options.detail || null
+        this.$_immediateStop = false
         this.$_canBubble = true
         this.$_bubbles = options.bubbles || false
         this.$_touches = null
         this.$_targetTouches = null
         this.$_changedTouches = null
-        this.$_cancelable = false
+        this.$_cancelable = true
+        this.$_preventDefault = false
 
         // 补充字段
         const extra = options.$$extra
@@ -41,12 +46,24 @@ class Event {
             this.$_touches = options.touches.map(touch => ({...touch, target: options.target}))
 
             this.$$checkTargetTouches()
+        } else if (options.touches) {
+            this.$_touches = []
+            this.$_targetTouches = []
         }
 
         // 处理 changedTouches
         if (options.changedTouches && options.changedTouches.length) {
             this.$_changedTouches = options.changedTouches.map(touch => ({...touch, target: options.target}))
+        } else if (options.changedTouches) {
+            this.$_changedTouches = []
         }
+    }
+
+    /**
+     * 返回事件是否立即停止
+     */
+    get $$immediateStop() {
+        return this.$_immediateStop
     }
 
     /**
@@ -54,6 +71,13 @@ class Event {
      */
     get $$canBubble() {
         return this.$_canBubble
+    }
+
+    /**
+     * 返回事件是否阻止默认行为
+     */
+    get $$preventDefault() {
+        return this.$_preventDefault
     }
 
     /**
@@ -138,14 +162,31 @@ class Event {
         return this.$_detail
     }
 
+    get returnValue() {
+        return !this.$_preventDefault
+    }
+
+    set returnValue(value) {
+        if (value !== undefined) {
+            this.$_preventDefault = !value
+        }
+    }
+
     preventDefault() {
-    // 目前仅支持 a 标签的点击阻止
-        this.$_cancelable = true
+        // 目前仅支持 a 标签的点击阻止
+        this.$_preventDefault = true
     }
 
     stopPropagation() {
         if (this.eventPhase === Event.NONE) return
 
+        this.$_canBubble = false
+    }
+
+    stopImmediatePropagation() {
+        if (this.eventPhase === Event.NONE) return
+
+        this.$_immediateStop = true
         this.$_canBubble = false
     }
 

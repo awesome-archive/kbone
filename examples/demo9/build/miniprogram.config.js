@@ -14,28 +14,28 @@ module.exports = {
 	},
 	generate: {
 		tabBar: {
-            color: '#000000',
-            selectedColor: '#07c160',
-            backgroundColor: '#ffffff',
-            list: [{
-                pageName: 'page1',
-                text: 'page1',
-                iconPath: path.resolve(__dirname, '../src/img/page1.png'),
-                selectedIconPath: path.resolve(__dirname, '../src/img/page1-sel.png'),
-            }, {
-                pageName: 'page2',
-                text: 'page2',
-                iconPath: path.resolve(__dirname, '../src/img/page2.png'),
-                selectedIconPath: path.resolve(__dirname, '../src/img/page2-sel.png'),
-            }],
-        },
+			color: '#000000',
+			selectedColor: '#07c160',
+			backgroundColor: '#ffffff',
+			list: [{
+				pageName: 'page1',
+				text: 'page1',
+				iconPath: path.resolve(__dirname, '../src/img/page1.png'),
+				selectedIconPath: path.resolve(__dirname, '../src/img/page1-sel.png'),
+			}, {
+				pageName: 'page2',
+				text: 'page2',
+				iconPath: path.resolve(__dirname, '../src/img/page2.png'),
+				selectedIconPath: path.resolve(__dirname, '../src/img/page2-sel.png'),
+			}],
+		},
 	},
 	app: {
 		navigationBarTitleText: 'miniprogram-project',
 	},
 	projectConfig: {
-		appid: '',
-        projectname: 'kbone-demo9',
+		appid: 'wx14c7c4cd189644a1',
+		projectname: 'kbone-demo9',
 	},
 	packageConfig: {
 		author: 'wechat-miniprogram',

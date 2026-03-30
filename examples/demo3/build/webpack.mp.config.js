@@ -12,6 +12,7 @@ module.exports = {
     mode: 'production',
     entry: {
         index: path.resolve(__dirname, '../src/index/main.mp.js'),
+        pageContainer: path.resolve(__dirname, '../src/page-container/main.mp.js'),
     },
     output: {
         path: path.resolve(__dirname, '../dist/mp/common'), // 放到小程序代码目录中的 common 目录下
@@ -89,10 +90,15 @@ module.exports = {
             },
             {
                 test: /\.(png|jpg|gif|svg)$/,
-                loader: 'file-loader',
-                options: {
-                    name: '[name].[ext]?[hash]'
-                }
+                use: [{
+                    loader: 'url-loader',
+                    options: {
+                        limit: 102400,
+                        name: '[name]_[hash:hex:6].[ext]',
+                        emitFile: false,
+                        esModule: false,
+                    }
+                }],
             }
         ]
     },

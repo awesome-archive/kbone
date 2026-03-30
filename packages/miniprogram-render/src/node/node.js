@@ -112,8 +112,18 @@ class Node extends EventTarget {
         return cache.getDocument(this.$_pageId) || null
     }
 
+    get childNodes() {
+        return []
+    }
+
     hasChildNodes() {
         return false
+    }
+
+    remove() {
+        if (!this.parentNode || !this.parentNode.removeChild) return this
+
+        return this.parentNode.removeChild(this)
     }
 }
 

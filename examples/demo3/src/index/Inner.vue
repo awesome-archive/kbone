@@ -1,18 +1,18 @@
 <template>
     <div>
-        <div class="controls" @click="onVideoControlsClick">
+        <div class="cover-cnt" @click="onClick">
             <div>
                 img1:
-                <img class="video-img" src="https://i.loli.net/2019/07/27/5d3c141367f2784840.jpg"/>
+                <img class="cover-img" src="https://i.loli.net/2019/07/27/5d3c141367f2784840.jpg"/>
             </div>
             <div>
                 img2:
-                <img class="video-img" src="https://i.loli.net/2019/07/27/5d3c143497e6d38917.jpg"/>
+                <img class="cover-img" src="https://i.loli.net/2019/07/27/5d3c143497e6d38917.jpg"/>
             </div>
-            <div>this is video</div>
+            <div>this is cover</div>
         </div>
         <div class="btn-cnt">
-            <wx-component class="video-btn" behavior="button" open-type="share">分享</wx-component>
+            <wx-button class="cover-btn" open-type="share">分享</wx-button>
         </div>
     </div>
 </template>
@@ -21,15 +21,15 @@
 export default {
     name: 'Inner',
     methods: {
-        onVideoControlsClick(evt) {
-            console.log('onVideoControlsClick')
+        onClick(evt) {
+            console.log('onClick')
         },
     }
 }
 </script>
 
 <style>
-.controls {
+.cover-cnt {
   display: flex;
   width: 100%;
   height: 60px;
@@ -37,7 +37,7 @@ export default {
   align-items: center;
 }
 
-.controls .video-img {
+.cover-cnt .cover-img {
   width: 40px;
   height: 40px;
 }
@@ -47,7 +47,7 @@ export default {
   width: 100%;
 }
 
-.btn-cnt .video-btn {
+.btn-cnt .cover-btn {
   margin: 10px auto;
   width: 100px;
   height: 30px;

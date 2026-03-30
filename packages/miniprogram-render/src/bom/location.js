@@ -20,6 +20,8 @@ class Location extends EventTarget {
         this.$_hash = ''
 
         this.$_lastHash = ''
+        this.$_lastPathname = ''
+        this.$_lastSearch = ''
         this.$_lastHref = ''
         this.$_allowCheck = true // 是否检查 url 和 hash 变化
     }
@@ -39,38 +41,12 @@ class Location extends EventTarget {
     }
 
     /**
-     * 开始检查 hash 变化
-     */
-    $_startCheckHash() {
-        if (!this.$_allowCheck) return
-
-        this.$_lastHash = this.hash
-        this.$_lastHref = this.href
-    }
-
-    /**
-     * 检查 hash 变化
-     */
-    $_endCheckHash() {
-        if (!this.$_allowCheck) return
-
-        if (this.$_lastHash !== this.hash) {
-            this.$$trigger('hashchange', {
-                event: {
-                    oldURL: this.$_lastHref,
-                    newURL: this.href,
-                }
-            })
-        }
-    }
-
-    /**
      * 设置 href，不进入 history
      */
     $_setHrefWithoutEnterHistory(value) {
         if (!value || typeof value !== 'string') return
 
-        this.$_startCheckHash()
+        this.$$startCheckHash()
 
         if (!/^(([a-zA-Z0-9]+:)|(\/\/))/i.test(value)) {
             // 没有带协议
@@ -102,7 +78,8 @@ class Location extends EventTarget {
         this.$_search = search || ''
         this.$_hash = hash || ''
 
-        if (this.$_checkUrl(oldValues)) this.$_endCheckHash()
+        this.$$endCheckHash()
+        this.$_checkUrl(oldValues)
     }
 
     /**
@@ -146,7 +123,7 @@ class Location extends EventTarget {
             return false
         }
 
-        if (this.$_pathname !== oldValues.pathname) {
+        if (this.$_pathname !== oldValues.pathname || this.$_search !== oldValues.search) {
             const matchRoute = window.$$miniprogram.getMatchRoute(this.$_pathname)
 
             if (matchRoute) {
@@ -386,6 +363,39 @@ class Location extends EventTarget {
     }
 
     /**
+     * 开始检查 hash 变化
+     */
+    $$startCheckHash() {
+        if (!this.$_allowCheck) return
+
+        this.$_lastHash = this.$_hash
+        this.$_lastPathname = this.$_pathname
+        this.$_lastSearch = this.$_search
+        this.$_lastHref = this.href
+    }
+
+    /**
+     * 检查 hash 变化
+     */
+    $$endCheckHash(needCheckUrlChange) {
+        if (!this.$_allowCheck) return
+
+        if ((needCheckUrlChange || (this.$_lastPathname === this.$_pathname && this.$_lastSearch === this.$_search)) && this.$_lastHash !== this.$_hash) {
+            this.$$trigger('hashchange', {
+                event: {
+                    oldURL: this.$_lastHref,
+                    newURL: this.href,
+                }
+            })
+        }
+
+        this.$_lastHash = ''
+        this.$_lastPathname = ''
+        this.$_lastSearch = ''
+        this.$_lastHref = ''
+    }
+
+    /**
      * 对外属性和方法
      */
     get protocol() {
@@ -504,6 +514,8 @@ class Location extends EventTarget {
     set search(value) {
         if (typeof value !== 'string') return
 
+        const oldValues = this.$_getOldValues()
+
         if (!value || value === '?') {
             this.$_search = ''
         } else {
@@ -514,7 +526,7 @@ class Location extends EventTarget {
             this.$_search = search || ''
         }
 
-        this.$_enterHistory()
+        if (this.$_checkUrl(oldValues)) this.$_enterHistory()
     }
 
     get hash() {
@@ -524,7 +536,7 @@ class Location extends EventTarget {
     set hash(value) {
         if (typeof value !== 'string') return
 
-        this.$_startCheckHash()
+        this.$$startCheckHash()
 
         if (!value || value === '#') {
             this.$_hash = ''
@@ -536,7 +548,7 @@ class Location extends EventTarget {
             this.$_hash = hash || ''
         }
 
-        this.$_endCheckHash()
+        this.$$endCheckHash()
         this.$_enterHistory()
     }
 

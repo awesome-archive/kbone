@@ -1,6 +1,32 @@
 const cache = require('./cache')
 
 /**
+ * 判断是否是内置组件
+ */
+const WX_COMPONENT_MAP = {}
+const WX_COMPONENT_LIST = [
+    'cover-image', 'cover-view', 'match-media', 'movable-area', 'movable-view', 'page-container', 'scroll-view', 'swiper', 'swiper-item', 'view',
+    'icon', 'progress', 'rich-text', 'text',
+    'button', 'checkbox', 'checkbox-group', 'editor', 'form', 'input', 'label', 'picker', 'picker-view', 'picker-view-column', 'radio', 'radio-group', 'slider', 'switch', 'textarea',
+    'functional-page-navigator', 'navigator',
+    'audio', 'camera', 'channel-live', 'channel-video', 'image', 'live-player', 'live-pusher', 'video', 'voip-room',
+    'map',
+    'canvas',
+    'ad', 'ad-custom', 'official-account', 'open-data', 'store-coupon', 'store-gift', 'store-home', 'store-product', 'web-view',
+    // 特殊补充
+    'capture', 'catch', 'animation'
+]
+WX_COMPONENT_LIST.forEach(name => WX_COMPONENT_MAP[name] = name)
+function checkIsWxComponent(tagName, notNeedPrefix) {
+    const hasPrefix = tagName.indexOf('wx-') === 0
+    if (notNeedPrefix) {
+        return hasPrefix ? WX_COMPONENT_MAP[tagName.slice(3)] : WX_COMPONENT_MAP[tagName]
+    } else {
+        return hasPrefix ? WX_COMPONENT_MAP[tagName.slice(3)] : false
+    }
+}
+
+/**
  * 驼峰转连字符
  */
 function toDash(str) {
@@ -33,6 +59,11 @@ function getPageRoute(pageId) {
  * 从 pageRoute 中获取小程序页面名称
  */
 function getPageName(pageRoute) {
+    const pluginMatchRes = pageRoute.match(/(?:^|\/)__plugin__\/(?:.*?)(\/.*)/)
+    if (pluginMatchRes && pluginMatchRes[1]) {
+        // 插件页面的 route 需要特殊处理
+        pageRoute = pluginMatchRes[1]
+    }
     const splitPageRoute = pageRoute.split('/')
     return splitPageRoute[1] === 'pages' ? splitPageRoute[2] : splitPageRoute[1]
 }
@@ -52,9 +83,7 @@ function throttle(func) {
                 waitFuncSet.delete(func)
                 func()
             }
-        }).catch(() => {
-            // ignore
-        })
+        }).catch(console.error)
     }
 }
 
@@ -109,7 +138,39 @@ function isTagNameSupport(tagName) {
     return NOT_SUPPORT_TAG_NAME_LIST.indexOf(tagName) === -1
 }
 
+/**
+ * 处理 innerHTML/outerHTML 的属性值过滤
+ */
+function escapeForHtmlGeneration(value) {
+    return value.replace(/"/g, '&quot;')
+}
+
+/**
+ * setData 封装
+ */
+function setData(instance, data) {
+    const pageId = instance.pageId
+    const window = pageId ? cache.getWindow(pageId) : null
+    if (window && window._startInit) {
+        // 统计 init 阶段的 setData
+        window._iniCount++
+        instance.setData(data, () => {
+            window._iniCount--
+            if (!window._startInit && window._iniCount <= 0) {
+                // 回调全部回来了
+                if (window.document) window.document.$$trigger('DOMContentLoaded') // 注意此时可能页面已经销毁了，所以需要判断下 window.document
+                window._iniCount = 0
+            }
+        })
+        return
+    }
+
+    // 普通 setData
+    instance.setData(data)
+}
+
 module.exports = {
+    checkIsWxComponent,
     toDash,
     toCamel,
     getId,
@@ -120,4 +181,6 @@ module.exports = {
     completeURL,
     decodeContent,
     isTagNameSupport,
+    escapeForHtmlGeneration,
+    setData,
 }

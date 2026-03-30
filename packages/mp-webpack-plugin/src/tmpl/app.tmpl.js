@@ -1,6 +1,6 @@
 /* INIT_FUNCTION */
 
-const LIFE_CYCLE_METHODS = ['onLaunch', 'onShow', 'onHide', 'onError', 'onPageNotFound']
+const LIFE_CYCLE_METHODS = ['onLaunch', 'onShow', 'onHide', 'onError', 'onPageNotFound', 'onUnhandledRejection', 'onThemeChange']
 const extraConfig = {}
 for (const key in appConfig) {
     if (LIFE_CYCLE_METHODS.indexOf(key) === -1) extraConfig[key] = appConfig[key]
@@ -30,6 +30,30 @@ App({
     },
     onPageNotFound(options) {
         if (appConfig.onPageNotFound) appConfig.onPageNotFound.call(this, options)
+    },
+    onUnhandledRejection(options) {
+        const pages = getCurrentPages() || []
+        const currentPage = pages[pages.length - 1]
+        if (currentPage && currentPage.window) {
+            const event = new currentPage.window.Event({
+                timeStamp: currentPage.window.performance.now(),
+                touches: [],
+                changedTouches: [],
+                name: 'unhandledrejection',
+                target: currentPage.window,
+                eventPhase: currentPage.window.Event.AT_TARGET,
+                $$extra: {
+                    promise: options.promise,
+                    reason: options.reason,
+                }
+            })
+            currentPage.window.$$trigger('unhandledrejection', {event})
+        }
+
+        if (appConfig.onUnhandledRejection) appConfig.onUnhandledRejection.call(this, options)
+    },
+    onThemeChange(options) {
+        if (appConfig.onThemeChange) appConfig.onThemeChange.call(this, options)
     },
 
     ...extraConfig,

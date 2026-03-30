@@ -1,7 +1,8 @@
 {
     "component": true,
     "usingComponents": {
-        "element": "./index"
+        "element": "./index",
+        "element-vhost": "./index-vhost"
     },
     "componentGenerics": {
         "custom-component": {
